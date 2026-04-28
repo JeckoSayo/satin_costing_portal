@@ -1,0 +1,116 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="container py-4">
+
+  <div class="receipt-wrapper">
+
+    <div class="receipt-card" id="printArea">
+
+      <div class="receipt-header text-center">
+        <h1 class="mb-1">SATIN Creative Studio</h1>
+        <p class="text-muted mb-0">Order Receipt</p>
+      </div>
+
+      <div class="receipt-meta-grid">
+
+        <div><strong>Receipt #:</strong> {{ sale.receipt_number }}</div>
+        <div><strong>Date:</strong> {{ sale.created_at|date:"M d, Y h:i A" }}</div>
+
+        <div><strong>Customer:</strong> {{ sale.customer_name }}</div>
+        <div><strong>Platform:</strong> {{ sale.platform }}</div>
+
+        <div><strong>Payment:</strong> {{ sale.payment_method }}</div>
+        <div><strong>Status:</strong> {{ sale.status }}</div>
+
+        <div><strong>Order ID:</strong> {{ sale.platform_order_id|default:"-" }}</div>
+        <div><strong>Tracking #:</strong> {{ sale.tracking_number|default:"-" }}</div>
+
+      </div>
+
+      <h5 class="receipt-section-title">Items</h5>
+
+      <div class="table-responsive">
+        <table class="table receipt-table align-middle">
+          <thead>
+            <tr>
+              <th>Line</th>
+              <th>Product</th>
+              <th>Size</th>
+              <th class="text-end">Qty</th>
+              <th class="text-end">Unit</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for item in sale.items.all %}
+            <tr>
+              <td>{{ item.line_id }}</td>
+              <td>{{ item.product_name }}</td>
+              <td>{{ item.sticker_size }}</td>
+              <td class="text-end">{{ item.quantity }}</td>
+              <td class="text-end">₱{{ item.unit_price|floatformat:2 }}</td>
+              <td class="text-end fw-bold">₱{{ item.line_total|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td>-</td>
+              <td>{{ sale.order_name }}</td>
+              <td>{{ sale.sticker_size }}</td>
+              <td class="text-end">{{ sale.quantity }}</td>
+              <td class="text-end">₱{{ sale.price_per_piece|floatformat:2 }}</td>
+              <td class="text-end fw-bold">₱{{ sale.selling_price|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="receipt-total-box">
+
+        <div class="receipt-total-row">
+          <span>Subtotal</span>
+          <strong>₱{{ sale.selling_price|floatformat:2 }}</strong>
+        </div>
+
+        <div class="receipt-total-row">
+          <span>Shipping</span>
+          <strong>₱{{ sale.shipping_fee|floatformat:2 }}</strong>
+        </div>
+
+        <div class="receipt-total-row">
+          <span>Sales Tax</span>
+          <strong>₱{{ sale.sales_tax|floatformat:2 }}</strong>
+        </div>
+
+        <div class="receipt-total-row grand-total">
+          <span>Total</span>
+          <strong>₱{{ sale.total_collected|floatformat:2 }}</strong>
+        </div>
+
+      </div>
+
+      <div class="receipt-footer text-center mt-4">
+        Thank you for your order!
+      </div>
+
+    </div>
+
+    <div class="text-center mt-4 no-print">
+      <button onclick="window.print()" class="btn btn-primary px-4">
+        <i class="bi bi-printer me-1"></i>
+        Print Receipt
+      </button>
+
+      <a href="{% url 'sales_log' %}" class="btn btn-outline-secondary px-4 ms-2">
+        Back
+      </a>
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

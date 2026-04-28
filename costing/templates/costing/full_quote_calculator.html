@@ -1,0 +1,1494 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="figma-dashboard">
+
+  <div class="figma-page-head">
+    <div>
+      <h1 class="page-title mb-1">Dashboard</h1>
+      <p class="page-subtitle mb-0">
+        SATIN Creative Studio operations dashboard with smart pricing, quick presets, stock alerts, repeat customers, and chat-ready quotes
+      </p>
+    </div>
+  </div>
+
+  <form id="calculatorForm" method="post">
+    {% csrf_token %}
+
+    <div class="figma-kpi-grid">
+      <div class="figma-kpi-card kpi-blue">
+        <div class="figma-kpi-icon"><i class="bi bi-currency-dollar"></i></div>
+        <span>Current Item Cost</span>
+        <strong id="kpiTotalCost">₱0.00</strong>
+      </div>
+
+      <div class="figma-kpi-card kpi-pink">
+        <div class="figma-kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+        <span>Recommended Price</span>
+        <strong id="kpiRecommendedPrice">₱0.00</strong>
+      </div>
+
+      <div class="figma-kpi-card kpi-yellow">
+        <div class="figma-kpi-icon"><i class="bi bi-percent"></i></div>
+        <span>Profit Margin</span>
+        <strong id="kpiMargin">0.00%</strong>
+      </div>
+
+      <div class="figma-kpi-card kpi-green">
+        <div class="figma-kpi-icon"><i class="bi bi-bag-check"></i></div>
+        <span>Monthly Sales</span>
+        <strong>₱{{ monthly_sales|floatformat:2 }}</strong>
+      </div>
+    </div>
+
+    <div class="figma-card mt-4">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+        <div>
+          <h2 class="mb-1">Quick Quote Presets</h2>
+          <p class="text-muted mb-0">One-click starting points for common PrintCraft orders. You can still edit every field after applying a preset.</p>
+        </div>
+        <button type="button" class="btn btn-outline-primary rounded-pill" onclick="generateChatQuote()">
+          <i class="bi bi-chat-dots me-1"></i> Generate Chat Quote
+        </button>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-sm btn-primary rounded-pill" onclick="applyQuickPreset('sticker_bundle')">4 for ₱100 Stickers</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('logo_50')">50 Logo Labels</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('logo_100')">100 Product Labels</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('photo_4r')">4R Photo</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('invitation_50')">Invitation 50 pcs</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('cake_topper')">Cake Topper</button>
+      </div>
+    </div>
+
+    <div class="figma-main-grid mt-4">
+      <div class="figma-card">
+        <h2>Operations Snapshot</h2>
+        <div class="figma-metric-list">
+          <div><span>Today Orders</span><strong>{{ today_orders }}</strong></div>
+          <div><span>Today Revenue</span><strong>₱{{ today_revenue|floatformat:2 }}</strong></div>
+          <div><span>Today Profit</span><strong>₱{{ today_profit|floatformat:2 }}</strong></div>
+          <div><span>Due Today</span><strong><a href="{% url 'order_queue' %}?due=today">{{ due_today_count }}</a></strong></div>
+          <div><span>Ready Jobs</span><strong><a href="{% url 'order_queue' %}?due=ready">{{ ready_count }}</a></strong></div>
+          <div><span>Unpaid Balance</span><strong>₱{{ unpaid_balance|floatformat:2 }}</strong></div>
+          <div><span>Expenses Today</span><strong>₱{{ todays_expenses|floatformat:2 }}</strong></div>
+          <div class="metric-blue"><span>Estimated Lead Time</span><strong id="leadTimeEstimate">Ready today</strong></div>
+        </div>
+      </div>
+      <div class="figma-card">
+        <h2>Low Stock Alerts</h2>
+        {% if low_stock_materials %}
+          <div class="figma-metric-list">
+            {% for material in low_stock_materials %}
+              <div><span>{{ material.item_name|truncatechars:32 }}</span><strong>{{ material.stock_qty|floatformat:2 }} {{ material.unit }}</strong></div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No low-stock materials based on reorder levels.</p>
+        {% endif %}
+      </div>
+      <div class="figma-card">
+        <h2>Repeat Customers</h2>
+        {% if top_repeat_customers %}
+          <div class="figma-metric-list">
+            {% for customer in top_repeat_customers %}
+              <div><span>{{ customer.customer_name|truncatechars:24 }}</span><strong>{{ customer.order_count }} orders</strong></div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">Repeat customers will appear after sales are logged.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="figma-main-grid">
+
+      <div class="figma-card price-card">
+        <h2>Current Item Breakdown</h2>
+
+        <div class="figma-metric-list">
+          <div><span>Total Product Cost</span><strong id="totalProductCost">₱0.00</strong></div>
+          <div><span>Markup Price</span><strong id="markupPrice">₱0.00</strong></div>
+          <div><span>Margin Price</span><strong id="marginPrice">₱0.00</strong></div>
+          <div><span>Target Sale Price</span><strong id="targetSalePriceResult">₱0.00</strong></div>
+          <div class="metric-pink"><span>Recommended Base Price</span><strong id="recommendedBasePrice">₱0.00</strong></div>
+          <div><span>Discount</span><strong id="discountTotal">₱0.00</strong></div>
+          <div><span>Product Sale Price</span><strong id="productSalePrice">₱0.00</strong></div>
+          <div><span>Sales Tax</span><strong id="salesTax">₱0.00</strong></div>
+          <div><span>Shipping Fee</span><strong id="shippingFeeText">₱0.00</strong></div>
+          <div class="metric-blue"><span>Sales Price + Tax</span><strong id="priceTax">₱0.00</strong></div>
+          <div class="metric-yellow"><span>Profit</span><strong id="profit">₱0.00</strong></div>
+          <div class="metric-yellow"><span>Profit Margin</span><strong id="profitMargin">0.00%</strong></div>
+        </div>
+      </div>
+
+      <div class="figma-card overview-card">
+        <h2>Overview</h2>
+
+        <div class="figma-metric-list">
+          <div><span>Current Qty</span><strong id="currentQty">0</strong></div>
+          <div><span>Costing Qty / Sheet</span><strong id="costingQtyText">0</strong></div>
+          <div><span>Print Sheets Needed</span><strong id="sheetsNeeded">0</strong></div>
+          <div class="metric-blue"><span>Price / Piece</span><strong id="pricePiece">₱0.00</strong></div>
+          <div class="metric-blue"><span>Final Price</span><strong id="finalPrice">₱0.00</strong></div>
+          <div class="metric-yellow"><span>Profit / Piece</span><strong id="profitPiece">₱0.00</strong></div>
+          <div class="metric-blue"><span>Sales Price + Tax</span><strong id="salesPriceTaxOverview">₱0.00</strong></div>
+          <div class="metric-pink"><span>Pricing Rule</span><strong id="pricingReason">-</strong></div>
+        </div>
+      </div>
+
+      <div class="figma-card order-card">
+        <h2>Order Details</h2>
+
+        <div class="order-details-grid">
+
+          <button class="order-section-title full text-start" type="button" data-bs-toggle="collapse" data-bs-target="#customerOrderSection">
+            <i class="bi bi-person-lines-fill me-1"></i>
+            Customer & Order
+          </button>
+
+          <div class="collapse show full" id="customerOrderSection">
+            <div class="order-details-grid">
+              <div class="figma-field">
+                <label>Customer Name</label>
+                <input type="text" id="customerName" class="form-control figma-control user-input" placeholder="Enter customer name">
+              </div>
+
+              <div class="figma-field">
+                <label>Product / Order</label>
+                <input type="text" id="orderName" class="form-control figma-control user-input" placeholder="Enter product details">
+              </div>
+
+              <div class="figma-field">
+                <label>Size Mode</label>
+                <select id="stickerSize" class="form-select figma-control user-input">
+                  <option value="">Select size</option>
+                  {% for size in sticker_sizes %}
+                    <option value="{{ size.id }}" data-per-sheet="{{ size.best_for_costing }}" data-width="{{ size.width_in }}" data-height="{{ size.height_in }}">
+                      {{ size.name }}
+                    </option>
+                  {% endfor %}
+                  <option value="custom" data-per-sheet="0">Custom Size...</option>
+                </select>
+                <small class="text-muted">Use presets for common jobs, or choose Custom Size for any width/height.</small>
+              </div>
+
+              <div class="figma-field">
+                <label>Quantity Ordered</label>
+                <input type="number" id="quantity" class="form-control figma-control user-input" value="0">
+              </div>
+
+              <div class="figma-field">
+                <label>Product Type</label>
+                <select id="productType" class="form-select figma-control user-input">
+                  <option value="STICKER">Sticker / Label</option>
+                  <option value="PHOTO">Photo Print</option>
+                  <option value="INVITATION">Invitation / Card</option>
+                  <option value="CRICUT">Cricut Craft</option>
+                  <option value="EVENT">Event Package</option>
+                  <option value="OTHER">Other Custom</option>
+                </select>
+                <small class="text-muted">V3.2 smart minimum pricing changes by product type.</small>
+              </div>
+
+              <div class="figma-field">
+                <label>Cricut / Cut Complexity</label>
+                <select id="cutComplexity" class="form-select figma-control user-input">
+                  <option value="SIMPLE" data-fee="0">Simple / straight cut (+₱0)</option>
+                  <option value="STANDARD" data-fee="10">Standard contour (+₱10)</option>
+                  <option value="DETAILED" data-fee="25">Detailed / fine cuts (+₱25)</option>
+                  <option value="LAYERED" data-fee="50">Layered craft / assembly (+₱50)</option>
+                </select>
+              </div>
+
+              <div id="customSizePanel" class="figma-field full d-none">
+                <div class="order-details-grid">
+                  <div class="figma-field">
+                    <label>Custom Width</label>
+                    <input type="number" id="customWidth" class="form-control figma-control user-input" min="0" step="0.01" placeholder="e.g. 2">
+                  </div>
+                  <div class="figma-field">
+                    <label>Custom Height</label>
+                    <input type="number" id="customHeight" class="form-control figma-control user-input" min="0" step="0.01" placeholder="e.g. 1.5">
+                  </div>
+                  <div class="figma-field">
+                    <label>Unit</label>
+                    <select id="customSizeUnit" class="form-select figma-control user-input">
+                      <option value="in">inches</option>
+                      <option value="cm">centimeters</option>
+                    </select>
+                  </div>
+                  <div class="figma-field">
+                    <label>Paper / Media Size</label>
+                    <select id="paperSizeProfile" class="form-select figma-control user-input">
+                      {% for paper in paper_sizes %}
+                        <option value="{{ paper.id }}" data-width="{{ paper.width_in }}" data-height="{{ paper.height_in }}" data-cricut-width="{{ paper.cricut_safe_width_in }}" data-cricut-height="{{ paper.cricut_safe_height_in }}">
+                          {{ paper.name }} — {{ paper.width_in }} x {{ paper.height_in }} in
+                        </option>
+                      {% empty %}
+                        <option value="a4" data-width="8.27" data-height="11.69" data-cricut-width="7.19" data-cricut-height="9.70">A4 default — 8.27 x 11.69 in</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="figma-field full">
+                    <div class="form-check d-flex align-items-center gap-2">
+                      <input type="checkbox" id="useCricutSafeArea" class="form-check-input user-input" checked>
+                      <label class="form-check-label fw-bold mb-0" for="useCricutSafeArea">
+                        Use Cricut safe area / Print then cut
+                      </label>
+                    </div>
+                    <small class="text-muted">Unchecked = print-only mode uses the full selected paper size.</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="order-section-title full text-start" type="button" data-bs-toggle="collapse" data-bs-target="#salesPaymentSection">
+            <i class="bi bi-credit-card me-1"></i>
+            Sales & Payment
+          </button>
+
+          <div class="collapse show full" id="salesPaymentSection">
+            <div class="order-details-grid">
+              <div class="figma-field">
+                <label>Sales Channel</label>
+                <select name="platform" id="platform" class="form-select figma-control user-input">
+                  {% for value, label in platform_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="figma-field">
+                <label>Payment Method</label>
+                <select name="payment_method" id="paymentMethod" class="form-select figma-control user-input">
+                  {% for value, label in payment_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="figma-field">
+                <label>Order Status</label>
+                <select name="status" id="orderStatus" class="form-select figma-control user-input">
+                  {% for value, label in status_choices %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button class="order-section-title full text-start" type="button" data-bs-toggle="collapse" data-bs-target="#shippingPlatformSection">
+            <i class="bi bi-truck me-1"></i>
+            Shipping / Platform Details
+          </button>
+
+          <div class="collapse full" id="shippingPlatformSection">
+            <div class="order-details-grid">
+              <div class="figma-field">
+                <label>Platform Order ID</label>
+                <input type="text" name="platform_order_id" id="platformOrderId" class="form-control figma-control user-input" placeholder="Shopee/Lazada/TikTok order ID">
+              </div>
+
+              <div class="figma-field">
+                <label>Tracking Number</label>
+                <input type="text" name="tracking_number" id="trackingNumber" class="form-control figma-control user-input" placeholder="Tracking number">
+              </div>
+
+              <div class="figma-field">
+                <label>Courier</label>
+                <input type="text" name="courier" id="courier" class="form-control figma-control user-input" placeholder="J&T / Flash / SPX">
+              </div>
+
+              <div class="figma-field">
+                <label>Buyer Username</label>
+                <input type="text" name="buyer_username" id="buyerUsername" class="form-control figma-control user-input" placeholder="@username">
+              </div>
+
+              <div class="figma-field">
+                <label>Buyer Phone</label>
+                <input type="text" name="buyer_phone" id="buyerPhone" class="form-control figma-control user-input" placeholder="Phone number">
+              </div>
+
+              <div class="figma-field">
+                <label>Weight Grams</label>
+                <input type="number" name="weight_grams" id="weightGrams" class="form-control figma-control user-input" value="0">
+              </div>
+
+              <div class="figma-field full">
+                <label>Shipping Address</label>
+                <textarea name="shipping_address" id="shippingAddress" class="form-control figma-control user-input" rows="2" placeholder="Complete shipping address"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <button class="order-section-title full text-start" type="button" data-bs-toggle="collapse" data-bs-target="#productionDetailsSection">
+            <i class="bi bi-printer me-1"></i>
+            Production Details
+          </button>
+
+          <div class="collapse show full" id="productionDetailsSection">
+            <div class="order-details-grid">
+              <div class="figma-field">
+                <label>Print Sheets Needed</label>
+                <input type="number" id="printSheetsInput" class="form-control figma-control readonly-highlight" value="0" readonly>
+              </div>
+
+              <div class="figma-field">
+                <label>Costing Qty / Sheet</label>
+                <input type="number" id="costingQtySheet" class="form-control figma-control readonly-highlight" value="0" readonly>
+              </div>
+
+              <div class="figma-field">
+                <label>Material Item</label>
+                <select id="materialCost" class="form-select figma-control user-input">
+                  <option value="0">Select material</option>
+                  {% for material in main_materials %}
+                    <option value="{{ material.unit_cost }}" data-id="{{ material.id }}" data-stock="{{ material.stock_qty }}">
+                      {{ material.item_name }} — Stock: {{ material.stock_qty }} {{ material.unit }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="figma-field">
+                <label>Lamination / Photo Top</label>
+                <select id="laminationCost" class="form-select figma-control user-input">
+                  <option value="0">None</option>
+                  {% for lamination in laminations %}
+                    <option value="{{ lamination.unit_cost }}" data-id="{{ lamination.id }}" data-stock="{{ lamination.stock_qty }}">
+                      {{ lamination.item_name }} — Stock: {{ lamination.stock_qty }} {{ lamination.unit }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="figma-field">
+                <label>Packaging Item</label>
+                <select id="packagingCost" class="form-select figma-control user-input">
+                  <option value="0" data-capacity="1">Select packaging</option>
+                  {% for packaging in packagings %}
+                    <option value="{{ packaging.unit_cost }}"
+                            data-id="{{ packaging.id }}"
+                            data-stock="{{ packaging.stock_qty }}"
+                            data-capacity="{{ packaging.packaging_capacity }}">
+                      {{ packaging.item_name }} — Stock: {{ packaging.stock_qty }} {{ packaging.unit }}
+                    </option>
+                  {% endfor %}
+                </select>
+
+                <div id="packagingCapacityWrap" class="mt-2 d-none">
+                  <label class="small fw-bold text-muted">
+                    Capacity (stickers per package)
+                  </label>
+
+                  <input type="number" id="packagingCapacity" class="form-control figma-control user-input" min="1" value="1">
+                </div>
+              </div>
+
+              <div class="figma-field">
+                <label>Manual Extra Work Minutes <span>(Optional)</span></label>
+                <input type="number" id="laborMinutes" class="form-control figma-control user-input" value="0" min="0" title="Only use this for special cleanup, file fixing, or unusually complex orders.">
+              </div>
+
+              <div class="figma-field">
+                <label>Manual Override Price <span>(Optional)</span></label>
+                <input type="number" id="targetSalePrice" class="form-control figma-control user-input" value="0" placeholder="Leave 0 to use smart price">
+                <small class="text-muted">Use for repeat customers, promos, or fixed package prices.</small>
+              </div>
+
+              <div class="figma-field">
+                <label>Override Reason <span>(Optional)</span></label>
+                <input type="text" id="overrideReason" class="form-control figma-control user-input" placeholder="e.g. repeat customer / promo / bundle">
+              </div>
+
+              <div class="figma-field">
+                <label>Shipping Fee <span>(Optional)</span></label>
+                <input type="number" id="shippingFee" class="form-control figma-control user-input" value="0" step="0.01" min="0">
+              </div>
+            </div>
+          </div>
+
+          <button class="order-section-title full text-start" type="button" data-bs-toggle="collapse" data-bs-target="#pricingDefaults">
+            <i class="bi bi-sliders me-1"></i>
+            Pricing Defaults
+          </button>
+
+          <div class="collapse full" id="pricingDefaults">
+            <div class="figma-defaults-box">
+              <div class="order-details-grid">
+                <div class="figma-field">
+                  <label>Ink Cost / Sheet</label>
+                  <input type="number" id="inkCost" class="form-control figma-control readonly-field" value="{{ settings.default_ink_cost_per_sheet|default:0 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Base Handling Fee</label>
+                  <input type="number" id="baseHandlingFee" class="form-control figma-control readonly-field" value="{{ settings.base_handling_fee|default:10 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Labor Per Sheet</label>
+                  <input type="number" id="laborPerSheet" class="form-control figma-control readonly-field" value="{{ settings.labor_per_sheet|default:2 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Blade Wear Per Sheet</label>
+                  <input type="number" id="bladeWearPerSheet" class="form-control figma-control readonly-field" value="{{ settings.blade_wear_per_sheet|default:1 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Machine Overhead</label>
+                  <input type="number" id="machineOverhead" class="form-control figma-control readonly-field" value="{{ settings.machine_overhead_per_order|default:5 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Additional Direct Cost</label>
+                  <input type="number" id="additionalDirectCost" class="form-control figma-control readonly-field" value="{{ settings.additional_direct_cost|default:0.08 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Discount %</label>
+                  <input type="number" id="discountPercent" class="form-control figma-control readonly-field" value="{{ settings.default_discount_percent|default:0 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Markup %</label>
+                  <input type="number" id="markupPercent" class="form-control figma-control readonly-field" value="{{ settings.default_markup_percent|default:45 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Sales Tax %</label>
+                  <input type="number" id="taxPercent" class="form-control figma-control readonly-field" value="{{ settings.default_sales_tax_percent|default:0 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Target Margin %</label>
+                  <input type="number" id="marginPercent" class="form-control figma-control readonly-field" value="{{ settings.default_margin_percent|default:35 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Safety Buffer</label>
+                  <input type="number" id="safetyBufferAmount" class="form-control figma-control readonly-field" value="{{ settings.safety_buffer_per_order|default:0 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Minimum Order Price</label>
+                  <input type="number" id="minimumOrderPrice" class="form-control figma-control readonly-field" value="{{ settings.minimum_order_price|default:149 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Waste Buffer %</label>
+                  <input type="number" id="wastePercent" class="form-control figma-control readonly-field" value="{{ settings.default_waste_percent|default:7 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Marketplace Fee %</label>
+                  <input type="number" id="marketplaceFeePercent" class="form-control figma-control readonly-field" value="{{ settings.default_marketplace_fee_percent|default:0 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Rounding Mode</label>
+                  <input type="text" id="roundingMode" class="form-control figma-control readonly-field" value="{{ settings.rounding_mode|default:'ENDING_9' }}" readonly>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <input type="hidden" name="final_price" id="hiddenFinalPrice">
+        <input type="hidden" name="quantity" id="hiddenQuantity">
+        <input type="hidden" name="customer_name" id="hiddenCustomerName">
+        <input type="hidden" name="order_name" id="hiddenOrderName">
+        <input type="hidden" name="sticker_size" id="hiddenStickerSize">
+        <input type="hidden" name="sales_tax" id="hiddenSalesTax">
+        <input type="hidden" name="total_cost" id="hiddenTotalCost">
+        <input type="hidden" name="profit" id="hiddenProfit">
+        <input type="hidden" name="shipping_fee" id="hiddenShippingFee">
+        <input type="hidden" name="discount" id="hiddenDiscount">
+        <input type="hidden" name="order_items_json" id="orderItemsJson">
+
+        <div class="figma-action-row">
+          <button type="button" class="btn figma-clear-btn" onclick="clearCurrentItemOnly()">
+            <i class="bi bi-trash3 me-1"></i>
+            Clear Current Item
+          </button>
+
+          <button type="button" class="btn figma-log-btn" onclick="addItemToOrder()">
+            <i class="bi bi-plus-circle me-1"></i>
+            Add Item to Order
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="figma-card mt-4">
+      <h2>Order Items</h2>
+
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product</th>
+              <th>Size</th>
+              <th>Material</th>
+              <th class="text-end">Qty</th>
+              <th class="text-end">Sheets</th>
+              <th class="text-end">Unit Price</th>
+              <th class="text-end">Line Total</th>
+              <th class="text-end">Cost</th>
+              <th class="text-end">Profit</th>
+              <th class="text-center">Action</th>
+            </tr>
+          </thead>
+
+          <tbody id="orderItemsBody">
+            <tr>
+              <td colspan="11" class="text-center text-muted py-4 fw-bold">
+                No items added yet.
+              </td>
+            </tr>
+          </tbody>
+
+          <tfoot>
+            <tr class="fw-bold">
+              <td colspan="4">Order Total</td>
+              <td class="text-end" id="orderTotalQty">0</td>
+              <td></td>
+              <td></td>
+              <td class="text-end" id="orderSubtotal">₱0.00</td>
+              <td class="text-end" id="orderTotalCost">₱0.00</td>
+              <td class="text-end" id="orderTotalProfit">₱0.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="figma-action-row">
+        <button type="button" class="btn figma-clear-btn" onclick="clearOrderItems()">
+          <i class="bi bi-x-circle me-1"></i>
+          Clear Items
+        </button>
+
+        <button type="button" class="btn figma-log-btn" onclick="openLogSaleModal()">
+          <i class="bi bi-receipt me-1"></i>
+          Log Full Order
+        </button>
+      </div>
+    </div>
+
+    <div class="figma-bottom-grid">
+
+      <div class="figma-card">
+        <h2>Material Cost</h2>
+
+        <div class="figma-table-wrap">
+          <table class="figma-cost-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-end">Qty</th>
+                <th>Unit</th>
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td>Selected Material</td>
+                <td class="text-end" id="materialQty">0</td>
+                <td>sheet</td>
+                <td class="text-end" id="materialTotal">₱0.00</td>
+              </tr>
+
+              <tr>
+                <td>Selected Lamination</td>
+                <td class="text-end" id="laminationQty">0</td>
+                <td>sheet</td>
+                <td class="text-end" id="laminationTotal">₱0.00</td>
+              </tr>
+
+              <tr>
+                <td>Selected Packaging</td>
+                <td class="text-end" id="packagingQty">0</td>
+                <td>pcs</td>
+                <td class="text-end" id="packagingTotal">₱0.00</td>
+              </tr>
+
+              <tr>
+                <td>Ink Usage</td>
+                <td class="text-end" id="inkQty">0</td>
+                <td>sheet</td>
+                <td class="text-end" id="inkTotal">₱0.00</td>
+              </tr>
+
+              <tr>
+                <td>Safety Buffer</td>
+                <td class="text-end">1</td>
+                <td>order</td>
+                <td class="text-end" id="safetyBufferTotal">₱0.00</td>
+              </tr>
+
+              <tr class="figma-total-row">
+                <td colspan="3">Total Material Cost</td>
+                <td class="text-end" id="totalMaterialCost">₱0.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-none">
+          <span id="materialUnitPrice">₱0.00</span>
+          <span id="laminationUnitPrice">₱0.00</span>
+          <span id="packagingUnitPrice">₱0.00</span>
+          <span id="inkUnitPrice">₱0.00</span>
+          <span id="bufferPercentText">0%</span>
+        </div>
+      </div>
+
+      <div class="figma-card">
+        <h2>Labor Summary</h2>
+
+        <div class="figma-labor-list">
+          <div><span>Auto Labor</span><strong id="laborMinutesText">₱0.00</strong></div>
+          <div><span>Per Sheet Cost</span><strong id="laborRateText">₱0.00/sheet</strong></div>
+        </div>
+
+        <div class="figma-divider"></div>
+
+        <div class="figma-total-pill pink">
+          <span>Labor + Blade Cost</span>
+          <strong id="laborTotal">₱0.00</strong>
+        </div>
+      </div>
+
+      <div class="figma-card">
+        <h2>Additional Costs</h2>
+
+        <div class="figma-labor-list">
+          <div><span>Additional + Machine Overhead</span><strong id="additionalDirectCostTotal">₱0.00</strong></div>
+        </div>
+
+        <div class="figma-divider"></div>
+
+        <div class="figma-total-pill yellow">
+          <span>Total Additional</span>
+          <strong id="totalAdditionalCost">₱0.00</strong>
+        </div>
+      </div>
+
+    </div>
+
+  </form>
+
+  <div class="modal fade" id="logSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-receipt text-primary me-2"></i>
+            Confirm Log Sale
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="mb-2">Are you sure you want to log this sale?</p>
+
+          <div class="border rounded-4 p-3 bg-light">
+            <div><strong>Customer:</strong> <span id="modalCustomerName"></span></div>
+            <div><strong>Order:</strong> <span id="modalOrderName"></span></div>
+            <div><strong>Quantity:</strong> <span id="modalQuantity"></span></div>
+            <div><strong>Final Price:</strong> <span id="modalFinalPrice"></span></div>
+            <div><strong>Platform:</strong> <span id="modalPlatform"></span></div>
+            <div><strong>Payment:</strong> <span id="modalPayment"></span></div>
+            <div><strong>Status:</strong> <span id="modalStatus"></span></div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            Cancel
+          </button>
+
+          <button type="submit" name="action" value="log_sale" class="btn figma-log-btn" form="calculatorForm">
+            Yes, Log Sale
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal fade" id="chatQuoteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-chat-dots text-primary me-2"></i>Customer Chat Quote</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <textarea id="chatQuoteText" class="form-control figma-control" rows="8"></textarea>
+          <small class="text-muted">Copy this to Messenger, Instagram, SMS, or marketplace chat.</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn figma-log-btn" onclick="copyChatQuote()"><i class="bi bi-clipboard me-1"></i>Copy Quote</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+<style>
+input[type="checkbox"].form-check-input {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  accent-color: #0d6efd;
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+</style>
+
+{% block scripts %}
+<script>
+let orderItems = [];
+
+function money(value) {
+  return "₱" + Number(value || 0).toFixed(2);
+}
+
+function cleanMoney(value) {
+  return Number(String(value || "0").replace("₱", "").replace(/,/g, ""));
+}
+
+function roundSellingPrice(value) {
+  const mode = document.getElementById("roundingMode")?.value || "ENDING_9";
+  if (mode === "NONE") return Number(value || 0);
+  const whole = Math.ceil(Number(value || 0));
+  if (mode === "WHOLE") return whole;
+  if (whole <= 9) return 9;
+  const remainder = whole % 10;
+  let candidate = whole + (9 - remainder);
+  if (candidate < value) candidate += 10;
+  return candidate;
+}
+
+function numberValue(id) {
+  return Number(document.getElementById(id)?.value || 0);
+}
+
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.innerText = value;
+}
+
+function setValue(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.value = value;
+}
+
+function getSelectedText(id) {
+  const select = document.getElementById(id);
+  if (!select || select.selectedIndex < 0) return "";
+  return select.options[select.selectedIndex].text.trim();
+}
+
+function getSelectedDataId(id) {
+  const select = document.getElementById(id);
+  if (!select || select.selectedIndex < 0) return "";
+  return select.options[select.selectedIndex].dataset.id || "";
+}
+
+function syncCustomSizePanel() {
+  const sizeSelect = document.getElementById("stickerSize");
+  const panel = document.getElementById("customSizePanel");
+  if (!sizeSelect || !panel) return;
+  if (sizeSelect.value === "custom") {
+    panel.classList.remove("d-none");
+  } else {
+    panel.classList.add("d-none");
+  }
+}
+
+function toInches(value, unit) {
+  const n = Number(value || 0);
+  return unit === "cm" ? n / 2.54 : n;
+}
+
+function getActivePaperArea() {
+  const paperSelect = document.getElementById("paperSizeProfile");
+  const useCricut = document.getElementById("useCricutSafeArea")?.checked;
+  if (!paperSelect || paperSelect.selectedIndex < 0) {
+    return useCricut ? { width: 7.19, height: 9.70 } : { width: 8.27, height: 11.69 };
+  }
+  const option = paperSelect.options[paperSelect.selectedIndex];
+  const width = Number(useCricut ? option.dataset.cricutWidth : option.dataset.width) || 8.27;
+  const height = Number(useCricut ? option.dataset.cricutHeight : option.dataset.height) || 11.69;
+  return { width, height };
+}
+
+function calculateFitPerSheet(itemWidth, itemHeight) {
+  const paper = getActivePaperArea();
+  if (itemWidth <= 0 || itemHeight <= 0) return 0;
+  const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
+  const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
+  return Math.max(normal, rotated, 0);
+}
+
+function getStickersPerSheet() {
+  const sizeSelect = document.getElementById("stickerSize");
+  if (!sizeSelect || sizeSelect.selectedIndex < 0) return 1;
+
+  if (sizeSelect.value === "custom") {
+    const unit = document.getElementById("customSizeUnit")?.value || "in";
+    const width = toInches(document.getElementById("customWidth")?.value, unit);
+    const height = toInches(document.getElementById("customHeight")?.value, unit);
+    return calculateFitPerSheet(width, height) || 0;
+  }
+
+  const selectedOption = sizeSelect.options[sizeSelect.selectedIndex];
+  return Number(selectedOption.dataset.perSheet || 1);
+}
+
+function getStickerSizeText() {
+  const sizeSelect = document.getElementById("stickerSize");
+  if (sizeSelect?.value === "custom") {
+    const unit = document.getElementById("customSizeUnit")?.value || "in";
+    const widthRaw = Number(document.getElementById("customWidth")?.value || 0);
+    const heightRaw = Number(document.getElementById("customHeight")?.value || 0);
+    const paperName = getSelectedText("paperSizeProfile").split(" — ")[0] || "Paper";
+    const mode = document.getElementById("useCricutSafeArea")?.checked ? "Cricut" : "Print only";
+    return widthRaw && heightRaw
+      ? `${widthRaw} x ${heightRaw} ${unit} (${paperName}, ${mode})`
+      : "Custom Size";
+  }
+  return getSelectedText("stickerSize");
+}
+
+function getCurrentItemDimensionsInches() {
+  const sizeSelect = document.getElementById("stickerSize");
+  if (sizeSelect?.value === "custom") {
+    const unit = document.getElementById("customSizeUnit")?.value || "in";
+    return {
+      width: toInches(document.getElementById("customWidth")?.value, unit),
+      height: toInches(document.getElementById("customHeight")?.value, unit)
+    };
+  }
+
+  if (sizeSelect && sizeSelect.selectedIndex >= 0) {
+    const option = sizeSelect.options[sizeSelect.selectedIndex];
+    return {
+      width: Number(option.dataset.width || 0),
+      height: Number(option.dataset.height || 0)
+    };
+  }
+
+  return { width: 0, height: 0 };
+}
+
+function getCutComplexityFee() {
+  const select = document.getElementById("cutComplexity");
+  if (!select || select.selectedIndex < 0) return 0;
+  return Number(select.options[select.selectedIndex].dataset.fee || 0);
+}
+
+function getSmartPricingPolicy(qty) {
+  const productType = document.getElementById("productType")?.value || "STICKER";
+  const useCricut = document.getElementById("useCricutSafeArea")?.checked;
+  const dims = getCurrentItemDimensionsInches();
+  const area = Math.max(0, dims.width * dims.height);
+  const complexity = document.getElementById("cutComplexity")?.value || "SIMPLE";
+
+  let minimum = 149;
+  let setupFee = 20;
+  let reason = "Smart minimum";
+
+  if (productType === "PHOTO") {
+    setupFee = 10;
+    minimum = area <= 24 ? 35 : area <= 60 ? 59 : 99;
+    reason = "Photo print size-based minimum";
+  } else if (productType === "INVITATION") {
+    setupFee = 35;
+    minimum = qty <= 1 ? 99 : 149;
+    reason = "Invitation/card setup minimum";
+  } else if (productType === "CRICUT") {
+    setupFee = 50;
+    minimum = 149;
+    reason = "Cricut craft minimum";
+  } else if (productType === "EVENT") {
+    setupFee = 100;
+    minimum = 299;
+    reason = "Event package minimum";
+  } else if (productType === "OTHER") {
+    setupFee = 35;
+    minimum = Number(document.getElementById("minimumOrderPrice")?.value || 149);
+    reason = "General custom minimum";
+  } else {
+    setupFee = useCricut ? 25 : 15;
+    if (area <= 4) minimum = 49;
+    else if (area <= 16) minimum = 79;
+    else if (area <= 36) minimum = 99;
+    else minimum = 149;
+    reason = "Sticker size-based minimum";
+  }
+
+  if (qty >= 10 && productType === "STICKER") {
+    minimum = Math.max(99, Math.min(minimum, 149));
+    reason += " + batch order";
+  }
+  if (qty >= 50 && productType === "STICKER") {
+    minimum = Math.max(149, minimum);
+    reason += " + bulk protection";
+  }
+
+  const complexityFee = useCricut ? getCutComplexityFee() : 0;
+  if (useCricut && complexity !== "SIMPLE") reason += " + " + complexity.toLowerCase() + " cut";
+
+  return { minimum, setupFee, complexityFee, reason };
+}
+
+function getPackagingCapacity() {
+  const input = document.getElementById("packagingCapacity");
+  const val = Number(input?.value || 1);
+  return val <= 0 ? 1 : val;
+}
+
+function syncPackagingCapacity() {
+  const packagingSelect = document.getElementById("packagingCost");
+  const capacityInput = document.getElementById("packagingCapacity");
+  const capacityWrap = document.getElementById("packagingCapacityWrap");
+
+  if (!packagingSelect || !capacityInput || !capacityWrap) return;
+
+  const price = Number(packagingSelect.value || 0);
+
+  if (price <= 0) {
+    capacityWrap.classList.add("d-none");
+    capacityInput.value = 1;
+    return;
+  }
+
+  const selected = packagingSelect.options[packagingSelect.selectedIndex];
+  capacityInput.value = Number(selected.dataset.capacity || 1);
+  capacityWrap.classList.remove("d-none");
+}
+
+function applyPlatformDefaults() {
+  const platform = document.getElementById("platform")?.value;
+  const payment = document.getElementById("paymentMethod");
+  const status = document.getElementById("orderStatus");
+
+  if (!platform || !payment || !status) return;
+
+  if (platform === "Walk-in") {
+    payment.value = "Cash";
+    status.value = "Paid";
+  } else if (
+    platform === "Shopee" ||
+    platform === "Lazada" ||
+    platform === "TikTok Shop"
+  ) {
+    payment.value = "Platform Payment";
+    status.value = "Pending";
+  } else if (platform === "Facebook") {
+    payment.value = "GCash";
+    status.value = "Pending";
+  }
+}
+
+function calculateQuote() {
+  syncCustomSizePanel();
+  const qty = numberValue("quantity");
+  const costingQtySheet = getStickersPerSheet();
+
+  const materialUnitCost = numberValue("materialCost");
+  const laminationUnitCost = numberValue("laminationCost");
+  const packagingUnitCost = numberValue("packagingCost");
+  const shippingFee = numberValue("shippingFee");
+
+  const inkCostPerSheet = numberValue("inkCost");
+  const laborRate = 0;
+  const laborMinutes = numberValue("laborMinutes");
+  const baseHandlingFee = numberValue("baseHandlingFee");
+  const laborPerSheet = numberValue("laborPerSheet");
+  const bladeWearPerSheet = numberValue("bladeWearPerSheet");
+  const machineOverhead = numberValue("machineOverhead");
+  const additionalDirectCost = numberValue("additionalDirectCost");
+
+  const markupPercent = numberValue("markupPercent");
+  const marginPercent = numberValue("marginPercent");
+  const discountPercent = numberValue("discountPercent");
+  const taxPercent = numberValue("taxPercent");
+  const safetyBufferAmount = numberValue("safetyBufferAmount");
+  const targetSalePrice = numberValue("targetSalePrice");
+  const legacyMinimumOrderPrice = numberValue("minimumOrderPrice");
+  const smartPricing = getSmartPricingPolicy(qty);
+  const minimumOrderPrice = Math.max(0, smartPricing.minimum || legacyMinimumOrderPrice);
+  const wastePercent = numberValue("wastePercent");
+  const marketplaceFeePercent = numberValue("marketplaceFeePercent");
+
+  const sheetsNeeded =
+    qty > 0 && costingQtySheet > 0
+      ? Math.ceil(qty / costingQtySheet)
+      : 0;
+
+  const materialTotal = sheetsNeeded * materialUnitCost;
+  const laminationTotal = sheetsNeeded * laminationUnitCost;
+
+  const packagingCapacity = getPackagingCapacity();
+
+  const packagingQty =
+    qty > 0 && packagingUnitCost > 0
+      ? Math.ceil(qty / packagingCapacity)
+      : 0;
+
+  const packagingTotal = packagingQty * packagingUnitCost;
+  const inkTotal = sheetsNeeded * inkCostPerSheet;
+
+  const baseMaterialCost =
+    materialTotal +
+    laminationTotal +
+    packagingTotal +
+    inkTotal +
+    safetyBufferAmount;
+
+  const wasteCost = baseMaterialCost * (wastePercent / 100);
+  const totalMaterialCost = baseMaterialCost + wasteCost;
+
+  const laborPerSheetTotal = sheetsNeeded * laborPerSheet;
+  const bladeWearTotal = sheetsNeeded * bladeWearPerSheet;
+  const manualExtraLabor = laborMinutes > 0 ? (80 / 60) * laborMinutes : 0;
+  const laborTotal = baseHandlingFee + laborPerSheetTotal + bladeWearTotal + manualExtraLabor;
+  const smartSetupFee = smartPricing.setupFee || 0;
+  const cutComplexityFee = smartPricing.complexityFee || 0;
+  const totalAdditionalCost = additionalDirectCost + machineOverhead + smartSetupFee + cutComplexityFee;
+  const totalCost = totalMaterialCost + laborTotal + totalAdditionalCost;
+
+  const markupPrice = totalCost + totalCost * (markupPercent / 100);
+
+  const protectedMarginPercent = marginPercent + marketplaceFeePercent;
+  const marginPrice =
+    protectedMarginPercent < 100
+      ? totalCost / (1 - protectedMarginPercent / 100)
+      : 0;
+
+  const recommendedBasePrice =
+    roundSellingPrice(Math.max(markupPrice, marginPrice, targetSalePrice || 0, minimumOrderPrice));
+
+  const discountTotal = recommendedBasePrice * (discountPercent / 100);
+  const productSalePrice = roundSellingPrice(Math.max(recommendedBasePrice - discountTotal, minimumOrderPrice));
+  const salesTax = productSalePrice * (taxPercent / 100);
+  const salesPriceTax = productSalePrice + salesTax + shippingFee;
+
+  const marketplaceFee = productSalePrice * (marketplaceFeePercent / 100);
+  const profit = productSalePrice - totalCost - marketplaceFee;
+  const profitMargin = productSalePrice ? (profit / productSalePrice) * 100 : 0;
+
+  const pricePiece = qty ? salesPriceTax / qty : 0;
+  const profitPiece = qty ? profit / qty : 0;
+
+  setValue("costingQtySheet", costingQtySheet);
+  setValue("printSheetsInput", sheetsNeeded);
+  setValue("hiddenShippingFee", shippingFee.toFixed(2));
+
+  setText("kpiTotalCost", money(totalCost));
+  setText("kpiRecommendedPrice", money(salesPriceTax));
+  setText("kpiMargin", profitMargin.toFixed(1) + "%");
+  updateLeadTimeEstimate();
+
+  setText("currentQty", qty);
+  setText("costingQtyText", costingQtySheet);
+  setText("sheetsNeeded", sheetsNeeded);
+  setText("pricePiece", money(pricePiece));
+  setText("finalPrice", money(salesPriceTax));
+  setText("profitPiece", money(profitPiece));
+  setText("salesPriceTaxOverview", money(salesPriceTax));
+  const minimumApplied = recommendedBasePrice <= roundSellingPrice(minimumOrderPrice) || productSalePrice <= roundSellingPrice(minimumOrderPrice);
+  setText("pricingReason", minimumApplied ? "Minimum Applied: " + money(minimumOrderPrice) : smartPricing.reason);
+
+  setText("totalProductCost", money(totalCost));
+  setText("markupPrice", money(markupPrice));
+  setText("marginPrice", money(marginPrice));
+  setText("targetSalePriceResult", targetSalePrice ? money(targetSalePrice) : "-");
+  setText("recommendedBasePrice", money(recommendedBasePrice));
+  setText("discountTotal", discountTotal ? money(discountTotal) : "-");
+  setText("productSalePrice", money(productSalePrice));
+  setText("salesTax", money(salesTax));
+  setText("shippingFeeText", money(shippingFee));
+  setText("priceTax", money(salesPriceTax));
+  setText("profit", money(profit));
+  setText("profitMargin", profitMargin.toFixed(1) + "%");
+
+  setText("materialQty", sheetsNeeded);
+  setText("materialUnitPrice", money(materialUnitCost));
+  setText("materialTotal", money(materialTotal));
+
+  setText("laminationQty", sheetsNeeded);
+  setText("laminationUnitPrice", money(laminationUnitCost));
+  setText("laminationTotal", money(laminationTotal));
+
+  setText("packagingQty", packagingQty);
+  setText("packagingUnitPrice", money(packagingUnitCost));
+  setText("packagingTotal", money(packagingTotal));
+
+  setText("inkQty", sheetsNeeded);
+  setText("inkUnitPrice", money(inkCostPerSheet));
+  setText("inkTotal", money(inkTotal));
+
+  setText("bufferPercentText", "0%");
+  setText("safetyBufferTotal", money(safetyBufferAmount));
+  setText("totalMaterialCost", money(totalMaterialCost));
+
+  setText("laborMinutesText", "Auto: " + money(baseHandlingFee + laborPerSheetTotal + bladeWearTotal) + (laborMinutes ? " + extra " + laborMinutes + " min" : ""));
+  setText("laborRateText", money(laborPerSheet) + "/sheet + " + money(bladeWearPerSheet) + " blade");
+  setText("laborTotal", money(laborTotal));
+
+  setText("additionalDirectCostTotal", money(additionalDirectCost + machineOverhead + smartSetupFee + cutComplexityFee));
+  setText("totalAdditionalCost", money(totalAdditionalCost));
+
+  setValue("hiddenFinalPrice", salesPriceTax.toFixed(2));
+  setValue("hiddenSalesTax", salesTax.toFixed(2));
+  setValue("hiddenTotalCost", totalCost.toFixed(2));
+  setValue("hiddenProfit", profit.toFixed(2));
+  setValue("hiddenDiscount", discountTotal.toFixed(2));
+}
+
+function getCurrentItemData() {
+  calculateQuote();
+
+  const qty = numberValue("quantity");
+  const lineTotal = cleanMoney(document.getElementById("priceTax").innerText);
+  const lineCost = cleanMoney(document.getElementById("totalProductCost").innerText);
+  const lineProfit = cleanMoney(document.getElementById("profit").innerText);
+
+  const materialQtyUsed = numberValue("printSheetsInput");
+  const laminationQtyUsed =
+    numberValue("laminationCost") > 0
+      ? numberValue("printSheetsInput")
+      : 0;
+
+  const packagingQtyUsed = cleanMoney(
+    document.getElementById("packagingQty").innerText
+  );
+
+  return {
+    sku: "",
+
+    product_name: document.getElementById("orderName").value.trim(),
+    sticker_size: getStickerSizeText(),
+    sticker_size_id: document.getElementById("stickerSize").value,
+
+    material_id: getSelectedDataId("materialCost"),
+    lamination_id: getSelectedDataId("laminationCost"),
+    packaging_id: getSelectedDataId("packagingCost"),
+
+    material_name: getSelectedText("materialCost"),
+    lamination_name: getSelectedText("laminationCost"),
+    packaging_name: getSelectedText("packagingCost"),
+
+    quantity: qty,
+    sheets_needed: numberValue("printSheetsInput"),
+    packaging_capacity: getPackagingCapacity(),
+
+    material_qty_used: materialQtyUsed,
+    lamination_qty_used: laminationQtyUsed,
+    packaging_qty_used: packagingQtyUsed,
+
+    ink_cost_per_sheet: numberValue("inkCost"),
+    labor_minutes: numberValue("laborMinutes"),
+    additional_direct_cost: numberValue("additionalDirectCost"),
+    target_sale_price: numberValue("targetSalePrice"),
+    product_type: document.getElementById("productType")?.value || "STICKER",
+    cut_complexity: document.getElementById("cutComplexity")?.value || "SIMPLE",
+    pricing_rule: document.getElementById("pricingReason")?.innerText || "",
+
+    unit_price: qty ? lineTotal / qty : 0,
+    line_total: lineTotal,
+    line_cost: lineCost,
+    line_profit: lineProfit,
+
+    notes: [document.getElementById("pricingReason")?.innerText || "", document.getElementById("overrideReason")?.value || ""].filter(Boolean).join(" | ")
+  };
+}
+
+function addItemToOrder() {
+  const productName = document.getElementById("orderName").value.trim();
+  const quantity = numberValue("quantity");
+
+  if (!productName || quantity <= 0) {
+    alert("Please enter Product / Order and Quantity before adding an item.");
+    return;
+  }
+
+  orderItems.push(getCurrentItemData());
+  renderOrderItems();
+  clearCurrentItemOnly();
+}
+
+function renderOrderItems() {
+  const tbody = document.getElementById("orderItemsBody");
+  const hiddenInput = document.getElementById("orderItemsJson");
+
+  tbody.innerHTML = "";
+
+  if (orderItems.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="11" class="text-center text-muted py-4 fw-bold">
+          No items added yet.
+        </td>
+      </tr>
+    `;
+  }
+
+  let totalQty = 0;
+  let subtotal = 0;
+  let totalCost = 0;
+  let totalProfit = 0;
+
+  orderItems.forEach(function (item, index) {
+    totalQty += Number(item.quantity || 0);
+    subtotal += Number(item.line_total || 0);
+    totalCost += Number(item.line_cost || 0);
+    totalProfit += Number(item.line_profit || 0);
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.product_name}</td>
+        <td>${item.sticker_size}</td>
+        <td>${item.material_name}</td>
+        <td class="text-end">${item.quantity}</td>
+        <td class="text-end">${item.sheets_needed}</td>
+        <td class="text-end">${money(item.unit_price)}</td>
+        <td class="text-end">${money(item.line_total)}</td>
+        <td class="text-end">${money(item.line_cost)}</td>
+        <td class="text-end">${money(item.line_profit)}</td>
+        <td class="text-center">
+          <button type="button"
+                  class="btn btn-sm btn-danger action-icon-btn"
+                  onclick="removeOrderItem(${index})">
+            <i class="bi bi-trash3"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  setText("orderTotalQty", totalQty);
+  setText("orderSubtotal", money(subtotal));
+  setText("orderTotalCost", money(totalCost));
+  setText("orderTotalProfit", money(totalProfit));
+
+  hiddenInput.value = JSON.stringify(orderItems);
+
+  setValue("hiddenQuantity", totalQty);
+  setValue("hiddenFinalPrice", subtotal.toFixed(2));
+  setValue("hiddenTotalCost", totalCost.toFixed(2));
+  setValue("hiddenProfit", totalProfit.toFixed(2));
+}
+
+function removeOrderItem(index) {
+  orderItems.splice(index, 1);
+  renderOrderItems();
+}
+
+function clearOrderItems() {
+  orderItems = [];
+  renderOrderItems();
+}
+
+function clearCurrentItemOnly() {
+  setValue("orderName", "");
+  setValue("quantity", "0");
+  setValue("targetSalePrice", "0");
+  setValue("overrideReason", "");
+  calculateQuote();
+}
+
+function clearOrderFields() {
+  clearCurrentItemOnly();
+
+  setValue("customerName", "");
+  setValue("platformOrderId", "");
+  setValue("trackingNumber", "");
+  setValue("courier", "");
+  setValue("buyerUsername", "");
+  setValue("buyerPhone", "");
+  setValue("weightGrams", "0");
+  setValue("shippingAddress", "");
+
+  document.getElementById("customerName")?.classList.remove("is-invalid");
+  document.getElementById("orderName")?.classList.remove("is-invalid");
+
+  applyPlatformDefaults();
+}
+
+function openLogSaleModal() {
+  if (orderItems.length === 0) {
+    alert("Please add at least one item to the order before logging sale.");
+    return;
+  }
+
+  const customerName = document.getElementById("customerName").value.trim();
+
+  if (!customerName) {
+    document.getElementById("customerName").classList.add("is-invalid");
+    alert("Please enter Customer Name before logging sale.");
+    return;
+  }
+
+  document.getElementById("customerName").classList.remove("is-invalid");
+
+  const orderName = orderItems.map(item => item.product_name).join(", ");
+  const quantity = document.getElementById("orderTotalQty").innerText;
+  const finalPrice = document.getElementById("orderSubtotal").innerText;
+
+  setValue("hiddenCustomerName", customerName);
+  setValue("hiddenOrderName", orderName);
+  setValue("hiddenQuantity", quantity);
+  setValue("hiddenStickerSize", "Multiple Items");
+  setValue("hiddenShippingFee", numberValue("shippingFee").toFixed(2));
+
+  setText("modalCustomerName", customerName);
+  setText("modalOrderName", orderName);
+  setText("modalQuantity", quantity);
+  setText("modalFinalPrice", finalPrice);
+  setText("modalPlatform", document.getElementById("platform").value);
+  setText("modalPayment", document.getElementById("paymentMethod").value);
+  setText("modalStatus", document.getElementById("orderStatus").value);
+
+  const logSaleModal = new bootstrap.Modal(
+    document.getElementById("logSaleModal")
+  );
+
+  logSaleModal.show();
+}
+
+function selectFirstSizeContaining(text) {
+  const select = document.getElementById("stickerSize");
+  if (!select) return;
+  const lower = String(text || "").toLowerCase();
+  for (let i = 0; i < select.options.length; i++) {
+    if (select.options[i].text.toLowerCase().includes(lower)) {
+      select.selectedIndex = i;
+      return;
+    }
+  }
+}
+
+function applyQuickPreset(name) {
+  const presets = {
+    sticker_bundle: { productType: "STICKER", orderName: "Waterproof sticker bundle", qty: 4, target: 100, sizeText: "2 x 2", complexity: "STANDARD", cricut: true },
+    logo_50: { productType: "STICKER", orderName: "Logo labels", qty: 50, target: 0, sizeText: "2 x 2", complexity: "STANDARD", cricut: true },
+    logo_100: { productType: "STICKER", orderName: "Product labels", qty: 100, target: 0, sizeText: "2 x 1.5", complexity: "STANDARD", cricut: true },
+    photo_4r: { productType: "PHOTO", orderName: "4R photo print", qty: 1, target: 0, custom: true, width: 4, height: 6, complexity: "SIMPLE", cricut: false },
+    invitation_50: { productType: "INVITATION", orderName: "Invitation cards", qty: 50, target: 0, custom: true, width: 5, height: 7, complexity: "SIMPLE", cricut: false },
+    cake_topper: { productType: "CRICUT", orderName: "Custom cake topper", qty: 1, target: 0, custom: true, width: 6, height: 6, complexity: "LAYERED", cricut: true }
+  };
+  const preset = presets[name];
+  if (!preset) return;
+  setValue("orderName", preset.orderName);
+  setValue("quantity", preset.qty);
+  setValue("targetSalePrice", preset.target || 0);
+  setValue("productType", preset.productType);
+  setValue("cutComplexity", preset.complexity || "SIMPLE");
+  const cricut = document.getElementById("useCricutSafeArea");
+  if (cricut) cricut.checked = !!preset.cricut;
+  if (preset.custom) {
+    setValue("stickerSize", "custom");
+    setValue("customWidth", preset.width);
+    setValue("customHeight", preset.height);
+    setValue("customSizeUnit", "in");
+  } else {
+    selectFirstSizeContaining(preset.sizeText);
+  }
+  syncCustomSizePanel();
+  calculateQuote();
+}
+
+function updateLeadTimeEstimate() {
+  const qty = numberValue("quantity");
+  const sheets = numberValue("printSheetsInput");
+  const productType = document.getElementById("productType")?.value || "STICKER";
+  let label = "Ready today";
+  if (productType === "EVENT" || productType === "CRICUT") label = "Confirm schedule";
+  if (sheets >= 15 || qty >= 300) label = "Likely 2-3 days";
+  else if (sheets >= 8 || qty >= 120) label = "Same day or next day";
+  setText("leadTimeEstimate", label);
+}
+
+function generateChatQuote() {
+  calculateQuote();
+  const order = document.getElementById("orderName")?.value.trim() || "custom order";
+  const qty = numberValue("quantity");
+  const size = getStickerSizeText();
+  const finalPrice = document.getElementById("priceTax")?.innerText || "₱0.00";
+  const leadTime = document.getElementById("leadTimeEstimate")?.innerText || "to be confirmed";
+  const material = getSelectedText("materialCost").split(" — ")[0] || "selected material";
+  const message = `Hi! For your ${order}${qty ? ` (${qty} pcs)` : ""}${size ? `, size ${size}` : ""}, total is ${finalPrice}. Material: ${material}. Estimated lead time: ${leadTime}. Let me know if you'd like to proceed 😊`;
+  setValue("chatQuoteText", message);
+  const modal = new bootstrap.Modal(document.getElementById("chatQuoteModal"));
+  modal.show();
+}
+
+function copyChatQuote() {
+  const field = document.getElementById("chatQuoteText");
+  field?.select();
+  document.execCommand("copy");
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  applyPlatformDefaults();
+  syncPackagingCapacity();
+  syncCustomSizePanel();
+  calculateQuote();
+  renderOrderItems();
+
+  document.querySelectorAll("#calculatorForm input, #calculatorForm select, #calculatorForm textarea")
+    .forEach(function (field) {
+      field.addEventListener("input", calculateQuote);
+      field.addEventListener("change", calculateQuote);
+    });
+
+  ["stickerSize", "customWidth", "customHeight", "customSizeUnit", "paperSizeProfile", "useCricutSafeArea", "productType", "cutComplexity"].forEach(function (id) {
+    document.getElementById(id)?.addEventListener("change", function () {
+      syncCustomSizePanel();
+      calculateQuote();
+    });
+    document.getElementById(id)?.addEventListener("input", function () {
+      syncCustomSizePanel();
+      calculateQuote();
+    });
+  });
+
+  document.getElementById("platform")?.addEventListener("change", function () {
+    applyPlatformDefaults();
+    calculateQuote();
+  });
+
+  document.getElementById("packagingCost")?.addEventListener("change", function () {
+    syncPackagingCapacity();
+    calculateQuote();
+  });
+
+  document.getElementById("packagingCapacity")?.addEventListener("input", function () {
+    calculateQuote();
+  });
+});
+</script>
+{% endblock %}

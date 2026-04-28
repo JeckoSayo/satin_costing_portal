@@ -1,0 +1,25 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="figma-dashboard">
+  <div class="figma-page-head"><div><h1 class="page-title mb-1">Review Smart Paste Inquiry</h1><p class="page-subtitle mb-0">Correct parsed fields before using them for a quote or order.</p></div></div>
+  <div class="figma-card">
+    <form method="post">
+      {% csrf_token %}
+      <div class="order-details-grid">
+        {% for field in form %}
+          <div class="figma-field {% if field.name == 'raw_message' or field.name == 'suggested_reply' %}full{% endif %}">
+            <label>{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="figma-action-row mt-3">
+        <a href="{% url 'smart_paste' %}" class="btn figma-clear-btn">Cancel</a>
+        <button type="submit" class="btn figma-log-btn">Save Inquiry</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

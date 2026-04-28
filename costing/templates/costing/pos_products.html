@@ -1,0 +1,35 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="figma-dashboard">
+  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+    <div><h1 class="page-title mb-1">POS Products</h1><p class="page-subtitle mb-0">Edit 4-for-100, 3-for-100, photo prints, and other fast counter buttons.</p></div>
+    <div class="d-flex gap-2"><a href="{% url 'fast_pos' %}" class="btn figma-clear-btn">Back to POS</a><a href="{% url 'pos_product_add' %}" class="btn figma-log-btn">Add POS Product</a></div>
+  </div>
+  <div class="figma-card">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Button</th><th>Material</th><th class="text-end">Price</th><th class="text-end">Cost</th><th class="text-end">Profit</th><th class="text-end">Margin</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for p in pos_products %}
+            <tr>
+              <td><strong>{{ p.button_label|default:p.name }}</strong><br><small class="text-muted">{{ p.bundle_quantity }} pcs / bundle</small></td>
+              <td>{{ p.main_material|default:"No material" }}</td>
+              <td class="text-end">₱{{ p.selling_price|floatformat:2 }}</td>
+              <td class="text-end">₱{{ p.estimated_cost|floatformat:2 }}</td>
+              <td class="text-end">₱{{ p.estimated_profit|floatformat:2 }}</td>
+              <td class="text-end">{{ p.estimated_margin|floatformat:1 }}%</td>
+              <td>{% if p.is_low_margin %}<span class="badge text-bg-warning">Review: ₱{{ p.recommended_price|floatformat:2 }}</span>{% else %}<span class="badge text-bg-success">Healthy</span>{% endif %}</td>
+              <td class="text-end">
+                <form action="{% url 'pos_product_snapshot' p.id %}" method="post" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Snapshot</button></form>
+                <a href="{% url 'pos_product_edit' p.id %}" class="btn btn-sm btn-primary">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-4">No POS products yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

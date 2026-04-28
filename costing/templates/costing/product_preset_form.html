@@ -1,0 +1,24 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="materials-page">
+  <div class="materials-head">
+    <div><h1 class="page-title mb-1">Product Preset</h1><p class="page-subtitle mb-0">Add/edit a product for stickers, photo prints, invitations, Cricut crafts, or event packages.</p></div>
+    <a href="{% url 'product_catalog' %}" class="btn materials-delete-btn">Back</a>
+  </div>
+  <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
+    <form method="post">{% csrf_token %}
+      <div class="row g-3">
+        {% for field in form %}
+          <div class="col-md-6">
+            <label class="form-label fw-bold">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4"><button class="btn materials-add-btn" type="submit">Save Product</button></div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

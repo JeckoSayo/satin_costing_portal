@@ -1,0 +1,18 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="sales-page">
+  <div class="sales-page-head"><h1 class="page-title mb-1">Cashflow</h1><p class="page-subtitle mb-0">Daily sales, collection, expenses, and unpaid balance.</p></div>
+  <div class="sales-stat-grid">
+    <div class="sales-stat-card"><span>Sales Today</span><strong>₱{{ sales_today|floatformat:2 }}</strong></div>
+    <div class="sales-stat-card"><span>Collected Today</span><strong>₱{{ collected_today|floatformat:2 }}</strong></div>
+    <div class="sales-stat-card"><span>Expenses Today</span><strong>₱{{ expenses_today|floatformat:2 }}</strong></div>
+    <div class="sales-stat-card"><span>Net Cash Today</span><strong>₱{{ net_cash_today|floatformat:2 }}</strong></div>
+    <div class="sales-stat-card"><span>Profit Today</span><strong>₱{{ profit_today|floatformat:2 }}</strong></div>
+    <div class="sales-stat-card"><span>Unpaid Balance</span><strong>₱{{ unpaid_balance|floatformat:2 }}</strong></div>
+  </div>
+  <div class="figma-main-grid">
+    <div class="figma-card"><h2>Recent Sales</h2>{% for s in recent_sales %}<div class="d-flex justify-content-between border-bottom py-2"><span>{{ s.receipt_number }} - {{ s.customer_name }}</span><strong>₱{{ s.selling_price|floatformat:2 }}</strong></div>{% empty %}<p class="text-muted">No sales yet.</p>{% endfor %}</div>
+    <div class="figma-card"><h2>Recent Expenses</h2>{% for e in recent_expenses %}<div class="d-flex justify-content-between border-bottom py-2"><span>{{ e.description }}</span><strong>₱{{ e.amount|floatformat:2 }}</strong></div>{% empty %}<p class="text-muted">No expenses yet.</p>{% endfor %}</div>
+  </div>
+</div>
+{% endblock %}

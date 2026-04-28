@@ -1,0 +1,133 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Satin Creative Studio Costing Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'costing/css/style.css' %}">
+</head>
+
+<body>
+
+<nav class="mobile-topbar d-lg-none">
+  <button class="btn btn-outline-light"
+          type="button"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#mobileMenu">
+    <i class="bi bi-list"></i>
+  </button>
+
+  <div class="mobile-brand">
+    <img src="{% static 'costing/img/SATIN.png' %}"
+         class="mobile-logo"
+         alt="Satin Creative Studio">
+
+    <div>
+      <strong>Satin Creative</strong>
+      <span>Studio</span>
+    </div>
+  </div>
+</nav>
+
+<div class="offcanvas offcanvas-start mobile-menu" tabindex="-1" id="mobileMenu">
+  <div class="offcanvas-header">
+    <div class="brand">
+      <img src="{% static 'costing/img/SATIN.png' %}"
+           class="brand-logo"
+           alt="Satin Creative Studio">
+
+      <div class="brand-text">
+        <h3>Satin Creative</h3>
+        <span>Studio</span>
+      </div>
+    </div>
+
+    <button type="button"
+            class="btn-close btn-close-white"
+            data-bs-dismiss="offcanvas">
+    </button>
+  </div>
+
+  <div class="offcanvas-body">
+    <nav class="nav flex-column gap-2">
+      {% include 'costing/partials/nav_links.html' %}
+    </nav>
+  </div>
+</div>
+
+<div class="app-shell">
+
+  <aside class="sidebar d-none d-lg-flex">
+    <div class="brand brand-modern">
+      <img src="{% static 'costing/img/SATIN.png' %}"
+           class="brand-logo"
+           alt="Satin Creative Studio">
+
+      <div class="brand-text">
+        <h3>Satin Creative</h3>
+        <span>Studio</span>
+      </div>
+    </div>
+
+    <nav class="nav flex-column gap-2">
+      {% include 'costing/partials/nav_links.html' %}
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button"
+                  class="btn-close"
+                  data-bs-dismiss="alert">
+          </button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+
+
+<button type="button" class="v4-tour-fab" data-v4-tour-start title="Start guided tour">
+  <i class="bi bi-question-lg"></i>
+</button>
+
+<div class="v4-tour-backdrop" id="v4TourBackdrop" hidden></div>
+<div class="v4-tour-card" id="v4TourCard" hidden role="dialog" aria-live="polite" aria-label="PrintCraft guided tour">
+  <div class="v4-tour-card-head">
+    <span class="v4-tour-pill" id="v4TourStepCount">Step 1</span>
+    <button type="button" class="btn-close" id="v4TourClose" aria-label="Close tour"></button>
+  </div>
+  <h4 id="v4TourTitle">Welcome</h4>
+  <p id="v4TourText">This guided tour explains the daily workflow.</p>
+  <div class="v4-tour-progress"><span id="v4TourProgress"></span></div>
+  <div class="v4-tour-actions">
+    <button type="button" class="btn btn-light" id="v4TourPrev">Back</button>
+    <button type="button" class="btn btn-outline-secondary" id="v4TourSkip">Skip</button>
+    <button type="button" class="btn btn-primary" id="v4TourNext">Next</button>
+  </div>
+</div>
+
+<script src="{% static 'costing/js/bootstrap_tour_v4.js' %}"></script>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

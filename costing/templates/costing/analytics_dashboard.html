@@ -1,0 +1,287 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+<div class="analytics-shell">
+  <div class="analytics-hero">
+    <div>
+      <span class="analytics-eyebrow">SATIN Creative Studio</span>
+      <h1>Analytics Dashboard</h1>
+      <p>Daily sales, profit, orders, inventory, customers, and product performance in one modern view.</p>
+    </div>
+    <div class="analytics-hero-card">
+      <span>Monthly Net Income</span>
+      <strong>₱{{ net_income_month|floatformat:2 }}</strong>
+      <small>Profit minus tracked expenses</small>
+    </div>
+  </div>
+
+  <div class="analytics-kpi-grid">
+    <div class="analytics-kpi kpi-primary">
+      <div class="analytics-icon"><i class="bi bi-cash-coin"></i></div>
+      <span>Revenue Today</span>
+      <strong>₱{{ revenue_today|floatformat:2 }}</strong>
+      <small>Month: ₱{{ revenue_month|floatformat:2 }}</small>
+    </div>
+    <div class="analytics-kpi kpi-success">
+      <div class="analytics-icon"><i class="bi bi-graph-up-arrow"></i></div>
+      <span>Profit Today</span>
+      <strong>₱{{ profit_today|floatformat:2 }}</strong>
+      <small>Month: ₱{{ profit_month|floatformat:2 }}</small>
+    </div>
+    <div class="analytics-kpi kpi-warning">
+      <div class="analytics-icon"><i class="bi bi-receipt"></i></div>
+      <span>Average Order Value</span>
+      <strong>₱{{ average_order_value|floatformat:2 }}</strong>
+      <small>{{ orders_month }} orders this month</small>
+    </div>
+    <div class="analytics-kpi kpi-danger">
+      <div class="analytics-icon"><i class="bi bi-exclamation-triangle"></i></div>
+      <span>Needs Attention</span>
+      <strong>{{ due_today }}</strong>
+      <small>{{ low_stock_count }} low stock • ₱{{ unpaid_balance|floatformat:2 }} unpaid</small>
+    </div>
+  </div>
+
+  <div class="analytics-grid-main">
+    <div class="analytics-card analytics-chart-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Revenue vs Cost vs Profit</h2>
+          <p>Last 7 days</p>
+        </div>
+        <span class="analytics-pill">Sales trend</span>
+      </div>
+      <canvas id="revenueProfitChart" height="130"></canvas>
+    </div>
+
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Order Queue</h2>
+          <p>Current production load</p>
+        </div>
+        <a href="{% url 'order_queue' %}" class="analytics-link">View queue</a>
+      </div>
+      <div class="queue-mini-list">
+        {% for job in job_counts %}
+          <div>
+            <span>{{ job.label }}</span>
+            <strong>{{ job.count }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-grid-two">
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Sales by Channel</h2>
+          <p>Last 30 days</p>
+        </div>
+      </div>
+      <canvas id="platformChart" height="190"></canvas>
+      <div class="analytics-table mt-3">
+        {% for row in platform_rows %}
+          <div>
+            <span>{{ row.platform|default:"Unknown" }}</span>
+            <strong>₱{{ row.total|floatformat:2 }}</strong>
+          </div>
+        {% empty %}
+          <div><span>No channel sales yet</span><strong>₱0.00</strong></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Material Usage</h2>
+          <p>Most used sheets/materials</p>
+        </div>
+        <a href="{% url 'materials' %}" class="analytics-link">Inventory</a>
+      </div>
+      <canvas id="materialChart" height="190"></canvas>
+      <div class="analytics-table mt-3">
+        {% for row in material_rows %}
+          <div>
+            <span>{{ row.material_name|truncatechars:34 }}</span>
+            <strong>{{ row.sheets|floatformat:2 }} sheets</strong>
+          </div>
+        {% empty %}
+          <div><span>No material usage yet</span><strong>0</strong></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-grid-two">
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Top Products</h2>
+          <p>Ranked by profit, last 30 days</p>
+        </div>
+        <a href="{% url 'product_catalog' %}" class="analytics-link">Catalog</a>
+      </div>
+      <div class="performance-list">
+        {% for row in product_rows %}
+          <div class="performance-row">
+            <div>
+              <strong>{{ row.display_name|truncatechars:32 }}</strong>
+              <span>{{ row.qty|default:0 }} pcs • sales ₱{{ row.total|floatformat:2 }}</span>
+            </div>
+            <b>₱{{ row.profit|floatformat:2 }}</b>
+          </div>
+        {% empty %}
+          <div class="empty-analytics">No product sales yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Top Customers</h2>
+          <p>Repeat buyers and high spenders</p>
+        </div>
+      </div>
+      <div class="performance-list">
+        {% for customer in top_customers %}
+          <div class="performance-row customer-row">
+            <div class="avatar-dot">{{ customer.customer_name|slice:":1"|upper }}</div>
+            <div>
+              <strong>{{ customer.customer_name }}</strong>
+              <span>{{ customer.orders }} orders • profit ₱{{ customer.profit|floatformat:2 }}</span>
+            </div>
+            <b>₱{{ customer.total|floatformat:2 }}</b>
+          </div>
+        {% empty %}
+          <div class="empty-analytics">No customer history yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-grid-two">
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Cashflow Snapshot</h2>
+          <p>This month</p>
+        </div>
+        <a href="{% url 'cashflow' %}" class="analytics-link">Cashflow</a>
+      </div>
+      <div class="analytics-table big-lines">
+        <div><span>Revenue</span><strong>₱{{ revenue_month|floatformat:2 }}</strong></div>
+        <div><span>Production Cost</span><strong>₱{{ cost_month|floatformat:2 }}</strong></div>
+        <div><span>Gross Profit</span><strong>₱{{ profit_month|floatformat:2 }}</strong></div>
+        <div><span>Tracked Expenses</span><strong>₱{{ expenses_month|floatformat:2 }}</strong></div>
+        <div class="net"><span>Net Income</span><strong>₱{{ net_income_month|floatformat:2 }}</strong></div>
+      </div>
+    </div>
+
+    <div class="analytics-card">
+      <div class="analytics-card-head">
+        <div>
+          <h2>Low Stock Alerts</h2>
+          <p>Items below reorder level</p>
+        </div>
+        <a href="{% url 'stock_purchases' %}" class="analytics-link">Stock in</a>
+      </div>
+      <div class="stock-alert-list">
+        {% for material in low_stock_materials %}
+          <div>
+            <i class="bi bi-box-seam"></i>
+            <span>{{ material.item_name|truncatechars:36 }}</span>
+            <strong>{{ material.stock_qty|floatformat:2 }} {{ material.unit }}</strong>
+          </div>
+        {% empty %}
+          <div class="stock-ok"><i class="bi bi-check-circle"></i> Stock levels look okay.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-card">
+    <div class="analytics-card-head">
+      <div>
+        <h2>Recent Sales</h2>
+        <p>Latest logged orders</p>
+      </div>
+      <a href="{% url 'sales_log' %}" class="analytics-link">Sales log</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table analytics-sales-table align-middle">
+        <thead>
+          <tr>
+            <th>Receipt</th><th>Customer</th><th>Order</th><th>Status</th><th class="text-end">Sales</th><th class="text-end">Profit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sale in recent_sales %}
+            <tr>
+              <td><a href="{% url 'sale_detail' sale.pk %}">{{ sale.receipt_number|default:sale.id }}</a></td>
+              <td>{{ sale.customer_name|default:"Walk-in" }}</td>
+              <td>{{ sale.order_name|truncatechars:40 }}</td>
+              <td><span class="analytics-status">{{ sale.job_status }}</span></td>
+              <td class="text-end">₱{{ sale.selling_price|floatformat:2 }}</td>
+              <td class="text-end">₱{{ sale.profit|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No sales logged yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const palette = {
+  blue: '#4b9be8',
+  blueSoft: 'rgba(75,155,232,.16)',
+  green: '#087f68',
+  greenSoft: 'rgba(8,127,104,.18)',
+  yellow: '#f4b740',
+  yellowSoft: 'rgba(244,183,64,.18)',
+  coral: '#ef7d6b',
+  coralSoft: 'rgba(239,125,107,.16)',
+  navy: '#08233f'
+};
+
+const chartLabels = {{ chart_labels|safe }};
+const revenueData = {{ chart_revenue|safe }};
+const costData = {{ chart_cost|safe }};
+const profitData = {{ chart_profit|safe }};
+
+new Chart(document.getElementById('revenueProfitChart'), {
+  type: 'line',
+  data: {
+    labels: chartLabels,
+    datasets: [
+      { label: 'Revenue', data: revenueData, borderColor: palette.blue, backgroundColor: palette.blueSoft, fill: true, tension: .42, pointRadius: 4 },
+      { label: 'Cost', data: costData, borderColor: palette.coral, backgroundColor: palette.coralSoft, fill: false, tension: .42, pointRadius: 4 },
+      { label: 'Profit', data: profitData, borderColor: palette.green, backgroundColor: palette.greenSoft, fill: false, tension: .42, pointRadius: 4 }
+    ]
+  },
+  options: { responsive: true, plugins: { legend: { labels: { color: palette.navy, font: { weight: 800 } } } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+});
+
+new Chart(document.getElementById('platformChart'), {
+  type: 'doughnut',
+  data: { labels: {{ platform_labels|safe }}, datasets: [{ data: {{ platform_values|safe }}, backgroundColor: [palette.blue, palette.green, palette.yellow, palette.coral, '#9ec6ec', '#183153'], borderWidth: 0 }] },
+  options: { cutout: '68%', plugins: { legend: { position: 'bottom', labels: { color: palette.navy, font: { weight: 800 } } } } }
+});
+
+new Chart(document.getElementById('materialChart'), {
+  type: 'bar',
+  data: { labels: {{ material_labels|safe }}, datasets: [{ label: 'Sheets used', data: {{ material_values|safe }}, backgroundColor: palette.blue, borderRadius: 12 }] },
+  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="sales-page">
+  <div class="sales-page-head"><h1 class="page-title mb-1">{{ customer_name }}</h1><p class="page-subtitle mb-0">Customer order history and repeat-order view.</p></div>
+  <div class="sales-stat-grid"><div class="sales-stat-card"><span>Orders</span><strong>{{ total_orders }}</strong></div><div class="sales-stat-card"><span>Total Spent</span><strong>₱{{ total_spent|floatformat:2 }}</strong></div><div class="sales-stat-card"><span>Total Profit</span><strong>₱{{ total_profit|floatformat:2 }}</strong></div></div>
+  <div class="sales-table-card"><h2>Past Orders</h2><table class="table align-middle"><thead><tr><th>Date</th><th>Receipt</th><th>Order</th><th>Total</th><th>Profit</th><th></th></tr></thead><tbody>{% for sale in sales %}<tr><td>{{ sale.created_at|date:"Y-m-d" }}</td><td><a href="{% url 'sale_detail' sale.pk %}">{{ sale.receipt_number }}</a></td><td>{{ sale.order_name }}</td><td>₱{{ sale.selling_price|floatformat:2 }}</td><td>₱{{ sale.profit|floatformat:2 }}</td><td><form method="post" action="{% url 'sale_reorder' sale.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Reorder</button></form></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No orders.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

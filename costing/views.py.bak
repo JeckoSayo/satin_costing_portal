@@ -1,0 +1,503 @@
+import json
+from decimal import Decimal
+from django.contrib import messages
+from django.http import JsonResponse
+from django.shortcuts import redirect, get_object_or_404
+from django.urls import reverse_lazy
+from django.views import View
+from django.views.generic import (
+    TemplateView,
+    ListView,
+    CreateView,
+    UpdateView,
+    DeleteView,
+    DetailView,
+)
+from .forms import (
+    MaterialForm,
+    StickerSizeForm,
+    PaperSizeForm,
+    PriceSettingForm,
+    QuoteForm,
+    ProductCategoryForm,
+    ProductPresetForm,
+    ProductPriceTierForm,
+    ProductQuoteForm,
+    )
+from .models import (
+    Material,
+    StickerSize,
+    PaperSize,
+    PriceSetting,
+    SaleLog,
+    SaleLogItem,
+    MarketplaceFee,
+    StockMovement,
+    ProductCategory,
+    ProductPreset,
+    ProductPriceTier,
+    CraftQuote,
+)
+from .services import calculate_quote, create_sale_from_order_items, reverse_sale_inventory, calculate_product_preset_quote, save_product_quote
+from django.db.models import Sum, F
+from django.utils import timezone
+
+
+class DashboardView(TemplateView):
+    template_name = "costing/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+
+        settings, _ = PriceSetting.objects.get_or_create(id=1)
+
+        ctx["settings"] = settings
+        ctx["sticker_sizes"] = StickerSize.objects.filter(is_active=True)
+        ctx["main_materials"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_STICKER
+        )
+        ctx["laminations"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_LAMINATION
+        )
+        ctx["packagings"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_PACKAGING
+        )
+
+        ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
+        ctx["payment_choices"] = SaleLog.PAYMENT_CHOICES
+        ctx["status_choices"] = SaleLog.STATUS_CHOICES
+
+        today = timezone.localdate()
+        today_sales = SaleLog.objects.filter(created_at__date=today)
+        month_sales = SaleLog.objects.filter(created_at__year=today.year, created_at__month=today.month)
+
+        ctx["recent_sales"] = SaleLog.objects.all()[:5]
+        ctx["today_revenue"] = today_sales.aggregate(total=Sum("selling_price"))["total"] or 0
+        ctx["today_profit"] = today_sales.aggregate(total=Sum("profit"))["total"] or 0
+        ctx["monthly_sales"] = month_sales.aggregate(total=Sum("selling_price"))["total"] or 0
+        ctx["low_stock_count"] = Material.objects.filter(is_active=True, stock_qty__lte=F("reorder_level")).count() if hasattr(Material, "reorder_level") else 0
+        ctx["marketplace_fees"] = MarketplaceFee.objects.filter(is_active=True)
+
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        order_items_json = request.POST.get("order_items_json", "[]")
+        try:
+            order_items = json.loads(order_items_json)
+        except json.JSONDecodeError:
+            order_items = []
+
+        payload = {
+            "customer_name": request.POST.get("customer_name", ""),
+            "order_name": request.POST.get("order_name", ""),
+            "platform": request.POST.get("platform") or SaleLog.PLATFORM_WALKIN,
+            "payment_method": request.POST.get("payment_method") or SaleLog.PAYMENT_CASH,
+            "status": request.POST.get("status") or SaleLog.STATUS_PENDING,
+            "platform_order_id": request.POST.get("platform_order_id", ""),
+            "tracking_number": request.POST.get("tracking_number", ""),
+            "courier": request.POST.get("courier", ""),
+            "buyer_username": request.POST.get("buyer_username", ""),
+            "buyer_phone": request.POST.get("buyer_phone", ""),
+            "shipping_address": request.POST.get("shipping_address", ""),
+            "weight_grams": request.POST.get("weight_grams") or 0,
+            "shipping_fee": request.POST.get("shipping_fee") or 0,
+            "discount": request.POST.get("discount") or 0,
+            "order_items": order_items,
+        }
+
+        try:
+            sale = create_sale_from_order_items(payload)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("dashboard")
+        except Exception as exc:
+            messages.error(request, f"Could not log sale: {exc}")
+            return redirect("dashboard")
+
+        messages.success(request, f"Sale {sale.receipt_number} logged successfully with V2 pricing and stock audit.")
+        return redirect("dashboard")
+
+class CalculateQuoteView(View):
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = json.loads(request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            payload = request.POST.dict()
+        form = QuoteForm(payload)
+        if not form.is_valid():
+            return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
+        result = calculate_quote(form.cleaned_data)
+        return JsonResponse({'ok': True, 'result': result})
+
+
+class LogSaleView(View):
+    def post(self, request, *args, **kwargs):
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except json.JSONDecodeError:
+            payload = request.POST.dict()
+
+        # API-friendly endpoint: one item quote -> one sale.
+        form = QuoteForm(payload)
+        if not form.is_valid():
+            return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+
+        item = {
+            "product_name": payload.get("order_name", ""),
+            "sticker_size_id": form.cleaned_data["sticker_size_id"],
+            "quantity": form.cleaned_data["quantity"],
+            "material_id": form.cleaned_data.get("material_id"),
+            "lamination_id": form.cleaned_data.get("lamination_id"),
+            "packaging_id": form.cleaned_data.get("packaging_id"),
+            "ink_cost_per_sheet": form.cleaned_data.get("ink_cost_per_sheet"),
+            "labor_minutes": form.cleaned_data.get("labor_minutes"),
+            "additional_direct_cost": form.cleaned_data.get("additional_direct_cost"),
+            "target_sale_price": form.cleaned_data.get("target_sale_price"),
+        }
+
+        sale_payload = {
+            "customer_name": payload.get("customer_name", ""),
+            "order_name": payload.get("order_name", ""),
+            "platform": payload.get("platform") or SaleLog.PLATFORM_WALKIN,
+            "payment_method": payload.get("payment_method") or SaleLog.PAYMENT_CASH,
+            "status": payload.get("status") or SaleLog.STATUS_PENDING,
+            "shipping_fee": payload.get("shipping_fee") or 0,
+            "order_items": [item],
+        }
+
+        try:
+            sale = create_sale_from_order_items(sale_payload)
+        except Exception as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+        return JsonResponse({
+            "ok": True,
+            "message": f"Sale {sale.receipt_number} logged successfully.",
+            "sale_id": sale.id,
+        })
+
+class SalesLogView(ListView):
+    model = SaleLog
+    template_name = "costing/sales_log.html"
+    context_object_name = "sales"
+
+    def get_queryset(self):
+        queryset = SaleLog.objects.all().order_by("-created_at")
+
+        search = self.request.GET.get("search")
+        date_from = self.request.GET.get("date_from")
+        date_to = self.request.GET.get("date_to")
+
+        if search:
+            queryset = (
+                queryset.filter(customer_name__icontains=search)
+                | queryset.filter(order_name__icontains=search)
+                | queryset.filter(sticker_size__icontains=search)
+            )
+
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+
+        return queryset.order_by("-created_at")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        queryset = self.get_queryset()
+
+        context["total_sales"] = queryset.aggregate(total=Sum("selling_price"))["total"] or 0
+        context["total_cost"] = queryset.aggregate(total=Sum("cost"))["total"] or 0
+        context["total_profit"] = queryset.aggregate(total=Sum("profit"))["total"] or 0
+        context["total_orders"] = queryset.count()
+
+        context["search"] = self.request.GET.get("search", "")
+        context["date_from"] = self.request.GET.get("date_from", "")
+        context["date_to"] = self.request.GET.get("date_to", "")
+
+        return context
+
+
+class SaleLogDeleteView(View):
+    def post(self, request, pk):
+        sale = get_object_or_404(SaleLog, pk=pk)
+        reverse_sale_inventory(sale)
+        sale.delete()
+        messages.success(request, "Sale deleted successfully and deducted stock was restored.")
+        return redirect("sales_log")
+
+
+class PriceSettingsView(UpdateView):
+    model = PriceSetting
+    form_class = PriceSettingForm
+    template_name = 'costing/price_settings.html'
+    success_url = reverse_lazy('price_settings')
+
+    def get_object(self, queryset=None):
+        obj, _ = PriceSetting.objects.get_or_create(id=1)
+        return obj
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Price settings updated successfully.')
+        return super().form_valid(form)
+
+
+class MaterialListView(ListView):
+    queryset = Material.objects.order_by("category", "item_name")
+    template_name = "costing/materials.html"
+    context_object_name = "materials"
+
+
+class MaterialCreateView(CreateView):
+    model = Material
+    form_class = MaterialForm
+    template_name = 'costing/material_form.html'
+    success_url = reverse_lazy('materials')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Material added successfully.')
+        return super().form_valid(form)
+
+
+class MaterialUpdateView(UpdateView):
+    model = Material
+    form_class = MaterialForm
+    template_name = 'costing/material_form.html'
+    success_url = reverse_lazy('materials')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Material updated successfully.')
+        return super().form_valid(form)
+
+
+class MaterialDeleteView(DeleteView):
+    model = Material
+    template_name = 'costing/material_confirm_delete.html'
+    success_url = reverse_lazy('materials')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Material deleted successfully.')
+        return super().form_valid(form)
+
+
+class BulkMaterialDeleteView(View):
+    def post(self, request, *args, **kwargs):
+        ids = request.POST.getlist('selected_materials')
+        if ids:
+            Material.objects.filter(id__in=ids).delete()
+            messages.success(request, f'{len(ids)} material(s) deleted.')
+        else:
+            messages.warning(request, 'No materials selected.')
+        return redirect('materials')
+
+
+class StickerSizeListView(ListView):
+    model = StickerSize
+    template_name = 'costing/sticker_sizes.html'
+    context_object_name = 'sizes'
+
+
+class StickerSizeCreateView(CreateView):
+    model = StickerSize
+    form_class = StickerSizeForm
+    template_name = 'costing/sticker_size_form.html'
+    success_url = reverse_lazy('sticker_sizes')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Sticker size added successfully.')
+        return super().form_valid(form)
+
+
+class StickerSizeUpdateView(UpdateView):
+    model = StickerSize
+    form_class = StickerSizeForm
+    template_name = 'costing/sticker_size_form.html'
+    success_url = reverse_lazy('sticker_sizes')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Sticker size updated successfully.')
+        return super().form_valid(form)
+
+
+class StickerSizeDeleteView(DeleteView):
+    model = StickerSize
+    template_name = 'costing/sticker_size_confirm_delete.html'
+    success_url = reverse_lazy('sticker_sizes')
+
+
+class PaperSizeListView(ListView):
+    model = PaperSize
+    template_name = 'costing/paper_sizes.html'
+    context_object_name = 'papers'
+
+
+class PaperSizeCreateView(CreateView):
+    model = PaperSize
+    form_class = PaperSizeForm
+    template_name = 'costing/paper_size_form.html'
+    success_url = reverse_lazy('paper_sizes')
+
+
+class PaperSizeUpdateView(UpdateView):
+    model = PaperSize
+    form_class = PaperSizeForm
+    template_name = 'costing/paper_size_form.html'
+    success_url = reverse_lazy('paper_sizes')
+
+
+class PaperSizeDeleteView(DeleteView):
+    model = PaperSize
+    template_name = 'costing/paper_size_confirm_delete.html'
+    success_url = reverse_lazy('paper_sizes')
+
+
+class SaleLogUpdateView(UpdateView):
+    model = SaleLog
+    fields = [
+        "customer_name",
+        "order_name",
+        "platform",
+        "platform_order_id",
+        "tracking_number",
+        "courier",
+        "buyer_username",
+        "buyer_phone",
+        "shipping_address",
+        "weight_grams",
+        "payment_method",
+        "status",
+        "notes",
+    ]
+    template_name = "costing/sale_form.html"
+    success_url = reverse_lazy("sales_log")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        sale = self.object
+        if sale.status in [SaleLog.STATUS_CANCELLED, SaleLog.STATUS_REFUNDED] and sale.stock_deducted:
+            reverse_sale_inventory(sale)
+            messages.success(self.request, "Sale updated and deducted stock was restored.")
+        else:
+            messages.success(self.request, "Sale updated successfully.")
+        return response
+
+
+class SaleLogDetailView(DetailView):
+    model = SaleLog
+    template_name = "costing/sale_detail.html"
+    context_object_name = "sale"
+
+
+class SaleReceiptView(DetailView):
+    model = SaleLog
+    template_name = "costing/sale_receipt.html"
+    context_object_name = "sale"
+
+
+class ProductCatalogView(ListView):
+    model = ProductPreset
+    template_name = "costing/product_catalog.html"
+    context_object_name = "products"
+
+    def get_queryset(self):
+        qs = ProductPreset.objects.select_related("category").prefetch_related("tiers").order_by("category__name", "name")
+        category = self.request.GET.get("category")
+        if category:
+            qs = qs.filter(category_id=category)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["categories"] = ProductCategory.objects.filter(is_active=True)
+        ctx["selected_category"] = self.request.GET.get("category", "")
+        ctx["recent_quotes"] = CraftQuote.objects.select_related("product")[:8]
+        return ctx
+
+
+class ProductPresetCreateView(CreateView):
+    model = ProductPreset
+    form_class = ProductPresetForm
+    template_name = "costing/product_preset_form.html"
+    success_url = reverse_lazy("product_catalog")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Product preset added.")
+        return super().form_valid(form)
+
+
+class ProductPresetUpdateView(UpdateView):
+    model = ProductPreset
+    form_class = ProductPresetForm
+    template_name = "costing/product_preset_form.html"
+    success_url = reverse_lazy("product_catalog")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Product preset updated.")
+        return super().form_valid(form)
+
+
+class ProductPriceTierCreateView(CreateView):
+    model = ProductPriceTier
+    form_class = ProductPriceTierForm
+    template_name = "costing/product_tier_form.html"
+    success_url = reverse_lazy("product_catalog")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Price tier added.")
+        return super().form_valid(form)
+
+
+class ProductQuoteView(TemplateView):
+    template_name = "costing/product_quote.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["products"] = ProductPreset.objects.filter(is_active=True).select_related("category")
+        ctx["quotes"] = CraftQuote.objects.select_related("product")[:10]
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        form = ProductQuoteForm(request.POST)
+        ctx = self.get_context_data()
+        if not form.is_valid():
+            ctx["errors"] = form.errors
+            return self.render_to_response(ctx)
+        try:
+            result = calculate_product_preset_quote(
+                form.cleaned_data["product_id"],
+                form.cleaned_data["quantity"],
+                platform=request.POST.get("platform") or SaleLog.PLATFORM_WALKIN,
+            )
+            ctx["result"] = result
+            ctx["selected_product_id"] = form.cleaned_data["product_id"]
+            ctx["entered_quantity"] = form.cleaned_data["quantity"]
+            ctx["customer_name"] = form.cleaned_data.get("customer_name", "")
+            if request.POST.get("save_quote") == "1":
+                quote, result = save_product_quote(
+                    form.cleaned_data["product_id"],
+                    form.cleaned_data["quantity"],
+                    customer_name=form.cleaned_data.get("customer_name", ""),
+                    notes=form.cleaned_data.get("notes", ""),
+                    platform=request.POST.get("platform") or SaleLog.PLATFORM_WALKIN,
+                )
+                messages.success(request, f"Quote saved for {quote.product.name}.")
+                ctx["result"] = result
+        except Exception as exc:
+            ctx["errors"] = {"quote": [str(exc)]}
+        return self.render_to_response(ctx)
+
+
+class ProductCategoryCreateView(CreateView):
+    model = ProductCategory
+    form_class = ProductCategoryForm
+    template_name = "costing/product_category_form.html"
+    success_url = reverse_lazy("product_catalog")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Product category added.")
+        return super().form_valid(form)

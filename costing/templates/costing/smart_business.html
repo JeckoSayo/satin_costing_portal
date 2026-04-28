@@ -1,0 +1,183 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="smart-dashboard">
+  <div class="smart-hero">
+    <div>
+      <span class="smart-badge">Smart Business Edition</span>
+      <h1>Intelligence + Automation</h1>
+      <p>Smart pricing, queue capacity, reorder forecasting, customer CRM signals, and ready-to-send chat quote templates.</p>
+    </div>
+    <div class="smart-hero-card {{ capacity_class }}">
+      <span>Production Load</span>
+      <strong>{{ capacity_level }}</strong>
+      <small>{{ pending_sheet_total }} pending sheets • {{ due_today }} due today • {{ overdue_count }} overdue</small>
+    </div>
+  </div>
+
+  <div class="smart-kpi-grid">
+    <div class="smart-kpi"><span>30-Day Revenue</span><strong>₱{{ revenue_30|floatformat:2 }}</strong><small>Orders: {{ order_count_30 }}</small></div>
+    <div class="smart-kpi"><span>30-Day Profit</span><strong>₱{{ profit_30|floatformat:2 }}</strong><small>Cost: ₱{{ cost_30|floatformat:2 }}</small></div>
+    <div class="smart-kpi"><span>Quote Conversion</span><strong>{{ conversion_rate|floatformat:1 }}%</strong><small>{{ quote_count_30 }} quotes → {{ order_count_30 }} orders</small></div>
+    <div class="smart-kpi"><span>Average Order Value</span><strong>₱{{ avg_order_value|floatformat:2 }}</strong><small>Use this to set promo bundles</small></div>
+  </div>
+
+  <div class="smart-grid-main">
+    <div class="smart-card wide">
+      <div class="smart-card-head">
+        <div>
+          <h2>Smart Pricing Suggestions</h2>
+          <p>Based on your historical item costs, sales, and target margin. Use these as guide prices, not forced prices.</p>
+        </div>
+      </div>
+      <div class="smart-price-list">
+        {% for item in pricing_suggestions %}
+          <div class="smart-price-row">
+            <div>
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.size }} • {{ item.qty }} pcs sold • {{ item.orders }} orders • margin {{ item.margin|floatformat:1 }}%</span>
+            </div>
+            <div class="smart-price-options">
+              <span><b>Aggressive</b> ₱{{ item.aggressive|floatformat:2 }}</span>
+              <span><b>Suggested</b> ₱{{ item.suggested|floatformat:2 }}</span>
+              <span><b>Premium</b> ₱{{ item.premium|floatformat:2 }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="smart-card">
+      <h2>Today’s Decision Notes</h2>
+      <div class="smart-note-list">
+        {% for decision in decisions %}
+          <div><i class="bi bi-check2-circle"></i><span>{{ decision }}</span></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="smart-grid-two">
+    <div class="smart-card">
+      <h2>Inventory Reorder Forecast</h2>
+      <div class="smart-table-list">
+        {% for row in forecast_rows %}
+          <div>
+            <span>
+              <strong>{{ row.material.item_name }}</strong>
+              <small>Used 30d: {{ row.used_30|floatformat:2 }} {{ row.material.unit }} • Daily: {{ row.daily_use|floatformat:2 }}</small>
+            </span>
+            <b class="status-pill {{ row.status|slugify }}">
+              {% if row.days_left %}{{ row.days_left|floatformat:0 }} days{% else %}No usage{% endif %}
+              • {{ row.status }}
+            </b>
+          </div>
+        {% empty %}
+          <div class="smart-empty">No material usage yet. Forecast will appear after sales deduct inventory.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="smart-card">
+      <h2>Capacity Planner</h2>
+      <div class="capacity-meter {{ capacity_class }}">
+        <strong>{{ capacity_level }}</strong>
+        <span>{{ pending_sheet_total }} pending sheets</span>
+      </div>
+      <div class="smart-table-list compact">
+        <div><span>Due Today</span><b>{{ due_today }}</b></div>
+        <div><span>Overdue</span><b>{{ overdue_count }}</b></div>
+        <div><span>High Qty Orders</span><b>{{ high_qty_orders }}</b></div>
+      </div>
+      <p class="smart-help">Use this before accepting rush or 300+ quantity jobs on the Canon G670/Cricut workflow.</p>
+    </div>
+  </div>
+
+  <div class="smart-grid-two">
+    <div class="smart-card">
+      <h2>Customer CRM Lite</h2>
+      <div class="smart-table-list">
+        {% for customer in top_customers %}
+          <div>
+            <span><strong>{{ customer.customer_name }}</strong><small>{{ customer.orders }} orders • Profit ₱{{ customer.profit|floatformat:2 }}</small></span>
+            <b>₱{{ customer.total|floatformat:2 }}</b>
+          </div>
+        {% empty %}
+          <div class="smart-empty">No customer sales yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="smart-card">
+      <h2>Channel Velocity</h2>
+      <div class="smart-table-list">
+        {% for channel in channel_rows %}
+          <div>
+            <span><strong>{{ channel.platform }}</strong><small>{{ channel.orders }} orders • Profit ₱{{ channel.profit|floatformat:2 }}</small></span>
+            <b>₱{{ channel.total|floatformat:2 }}</b>
+          </div>
+        {% empty %}
+          <div class="smart-empty">No sales by channel yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="smart-card">
+    <div class="smart-card-head">
+      <div>
+        <h2>Messenger / Chat Quote Templates</h2>
+        <p>Copy-ready responses for Facebook, Instagram, or chat inquiries.</p>
+      </div>
+    </div>
+    <div class="chat-template-grid">
+      {% for template in chat_templates %}
+        <div class="chat-template-card">
+          <strong>{{ template.title }}</strong>
+          <textarea readonly id="chatTemplate{{ forloop.counter }}">{{ template.text }}</textarea>
+          <button type="button" onclick="copyTemplate('chatTemplate{{ forloop.counter }}')"><i class="bi bi-clipboard"></i> Copy</button>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="smart-card">
+    <h2>Open Order Watchlist</h2>
+    <div class="table-responsive">
+      <table class="table smart-watch-table align-middle">
+        <thead><tr><th>Receipt</th><th>Customer</th><th>Order</th><th>Status</th><th>Due</th><th class="text-end">Amount</th></tr></thead>
+        <tbody>
+          {% for sale in open_orders %}
+            <tr>
+              <td><a href="{% url 'sale_detail' sale.pk %}">{{ sale.receipt_number }}</a></td>
+              <td>{{ sale.customer_name|default:'-' }}</td>
+              <td>{{ sale.order_name|truncatechars:35 }}</td>
+              <td><span class="analytics-status">{{ sale.job_status }}</span></td>
+              <td>{% if sale.due_date %}{{ sale.due_date }}{% else %}-{% endif %}</td>
+              <td class="text-end">₱{{ sale.selling_price|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No open orders.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyTemplate(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.select();
+  el.setSelectionRange(0, 99999);
+  navigator.clipboard?.writeText(el.value).then(function(){
+    alert('Template copied.');
+  }).catch(function(){
+    document.execCommand('copy');
+    alert('Template copied.');
+  });
+}
+</script>
+{% endblock %}

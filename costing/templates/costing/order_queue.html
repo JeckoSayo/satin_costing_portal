@@ -1,0 +1,75 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="sales-page">
+  <div class="sales-page-head">
+    <h1 class="page-title mb-1">Order Queue</h1>
+    <p class="page-subtitle mb-0">Daily job board for print, cut, packing, pickup, and release.</p>
+  </div>
+
+  <div class="sales-stat-grid">
+    <div class="sales-stat-card"><span>Due Today</span><strong>{{ due_today }}</strong></div>
+    <div class="sales-stat-card"><span>Overdue</span><strong>{{ overdue }}</strong></div>
+    <div class="sales-stat-card"><span>Ready</span><strong>{{ ready }}</strong></div>
+    <div class="sales-stat-card"><span>Shown</span><strong>{{ orders|length }}</strong></div>
+  </div>
+
+  <div class="sales-filter-card">
+    <form method="get" class="sales-filter-grid">
+      <input type="text" name="search" class="form-control sales-input" placeholder="Customer, receipt, order..." value="{{ search }}">
+      <select name="job_status" class="form-select sales-input">
+        <option value="">All job statuses</option>
+        {% for value,label in job_choices %}
+          <option value="{{ value }}" {% if selected_job_status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="due" class="form-select sales-input">
+        <option value="">All due dates</option>
+        <option value="today" {% if selected_due == "today" %}selected{% endif %}>Due today</option>
+        <option value="overdue" {% if selected_due == "overdue" %}selected{% endif %}>Overdue</option>
+        <option value="ready" {% if selected_due == "ready" %}selected{% endif %}>Ready</option>
+      </select>
+      <div class="sales-filter-actions">
+        <button class="btn sales-search-btn">Filter</button>
+        <a href="{% url 'order_queue' %}" class="btn sales-reset-btn">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="sales-table-card">
+    <h2>Jobs</h2>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Receipt</th><th>Customer</th><th>Order</th><th>Due</th><th>Status</th><th>Balance</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for sale in orders %}
+          <tr class="{% if sale.is_overdue %}table-danger{% elif sale.rush_order %}table-warning{% endif %}">
+            <td><a href="{% url 'sale_detail' sale.pk %}">{{ sale.receipt_number }}</a>{% if sale.rush_order %}<span class="badge bg-danger ms-1">Rush</span>{% endif %}</td>
+            <td>{{ sale.customer_name|default:"-" }}</td>
+            <td>{{ sale.order_name|truncatechars:45 }}</td>
+            <td>{{ sale.due_date|default:"-" }}</td>
+            <td>
+              <form method="post" action="{% url 'update_job_status' sale.pk %}" class="d-flex gap-2">
+                {% csrf_token %}
+                <select name="job_status" class="form-select form-select-sm">
+                  {% for value,label in job_choices %}
+                    <option value="{{ value }}" {% if sale.job_status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-primary">Save</button>
+              </form>
+            </td>
+            <td>₱{{ sale.balance_amount|floatformat:2 }}</td>
+            <td>
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'sale_edit' sale.pk %}">Edit</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'job_ticket' sale.pk %}">Ticket</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No jobs found.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

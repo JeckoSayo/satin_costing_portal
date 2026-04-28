@@ -1,0 +1,89 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="materials-page">
+  <div class="materials-head">
+    <div>
+      <h1 class="page-title mb-1">Product Quote</h1>
+      <p class="page-subtitle mb-0">Use this for stickers, photos, invitations, Cricut crafts, and event packages.</p>
+    </div>
+    <div class="materials-actions"><a href="{% url 'product_catalog' %}" class="btn materials-delete-btn"><i class="bi bi-stars me-1"></i>Catalog</a></div>
+  </div>
+
+  {% if errors %}<div class="alert alert-danger">{{ errors }}</div>{% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h3 class="fw-bold mb-3">Create Quote</h3>
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label fw-bold">Product</label>
+              <select name="product_id" class="form-select" required>
+                <option value="">Select product</option>
+                {% for p in products %}
+                  <option value="{{ p.id }}" {% if selected_product_id == p.id %}selected{% endif %}>{{ p.category.name }} — {{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Quantity</label>
+              <input name="quantity" type="number" min="1" class="form-control" value="{{ entered_quantity|default:4 }}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Customer Name</label>
+              <input name="customer_name" class="form-control" value="{{ customer_name|default:'' }}">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Notes</label>
+              <textarea name="notes" rows="3" class="form-control"></textarea>
+            </div>
+            <button class="btn materials-add-btn w-100 mb-2" type="submit"><i class="bi bi-calculator me-1"></i>Calculate</button>
+            <button class="btn btn-outline-success w-100" type="submit" name="save_quote" value="1"><i class="bi bi-save me-1"></i>Calculate & Save Quote</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      {% if result %}
+      <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-start">
+            <div><h3 class="fw-bold mb-1">{{ result.product_name }}</h3><p class="text-muted mb-0">{{ result.category }} · {{ result.tier_label }}</p></div>
+            <div class="text-end"><div class="text-muted small">Selling Price</div><h1 class="fw-bold">₱{{ result.selling_price }}</h1></div>
+          </div>
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-4"><div class="p-3 bg-light rounded-4"><div class="small text-muted">Price / Piece</div><div class="fw-bold">₱{{ result.price_per_piece }}</div></div></div>
+            <div class="col-md-4"><div class="p-3 bg-light rounded-4"><div class="small text-muted">Total Cost</div><div class="fw-bold">₱{{ result.total_cost }}</div></div></div>
+            <div class="col-md-4"><div class="p-3 bg-light rounded-4"><div class="small text-muted">Profit</div><div class="fw-bold text-success">₱{{ result.profit }} ({{ result.profit_margin }}%)</div></div></div>
+          </div>
+          {% if result.warnings %}
+            <div class="alert alert-warning mt-3 mb-0">{% for w in result.warnings %}<div>{{ w }}</div>{% endfor %}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h4 class="fw-bold">Cost Breakdown</h4>
+          <div class="row g-2">
+            <div class="col-md-6">Material: <strong>₱{{ result.material_cost }}</strong></div>
+            <div class="col-md-6">Lamination: <strong>₱{{ result.lamination_cost }}</strong></div>
+            <div class="col-md-6">Packaging: <strong>₱{{ result.packaging_cost }}</strong></div>
+            <div class="col-md-6">Ink: <strong>₱{{ result.ink_cost }}</strong></div>
+            <div class="col-md-6">Waste: <strong>₱{{ result.waste_cost }}</strong></div>
+            <div class="col-md-6">Labor: <strong>₱{{ result.labor_cost }}</strong></div>
+            <div class="col-md-6">Overhead/Design: <strong>₱{{ result.overhead_cost }}</strong></div>
+            <div class="col-md-6">Sheets Needed: <strong>{{ result.sheets_needed }}</strong></div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+        <div class="alert alert-info rounded-4">Select a product and quantity to calculate a product quote.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="sizes-page">
+
+    <div class="sizes-head">
+        <div>
+            <h1 class="page-title mb-1">Sticker Size Guide</h1>
+            <p class="page-subtitle mb-0">
+                Database of sticker sizes and sheet calculations
+            </p>
+        </div>
+
+        <a href="{% url 'sticker_size_add' %}" class="btn sizes-add-btn">
+            <i class="bi bi-plus-lg me-1"></i>
+            Add Size
+        </a>
+    </div>
+
+    <div class="sizes-table-card">
+        <div class="table-responsive">
+            <table id="sizesTable" class="table sizes-table align-middle mb-0 w-100">
+                <thead>
+                    <tr>
+                        <th>Sticker Size</th>
+                        <th>Width</th>
+                        <th>Height</th>
+                        <th>Paper</th>
+                        <th>Cricut</th>
+                        <th>Cricut Safe Qty</th>
+                        <th>Full Sheet Qty</th>
+                        <th>Costing Qty</th>
+                        <th>Notes</th>
+                        <th class="text-center" width="100">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for row in sizes %}
+                    <tr>
+                        <td class="fw-bold">{{ row.name }}</td>
+                        <td>{{ row.width_in|floatformat:2 }} in</td>
+                        <td>{{ row.height_in|floatformat:2 }} in</td>
+                        <td>{{ row.paper_size.name|default:"A4" }}</td>
+
+                        <td>
+                            {% if row.use_cricut_safe_area %}
+                                <span class="sizes-badge green">Yes</span>
+                            {% else %}
+                                <span class="sizes-badge gray">No</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ row.safe_fit }}</td>
+                        <td>{{ row.max_tight_fit }}</td>
+                        <td><strong>{{ row.best_for_costing }}</strong></td>
+                        <td>{{ row.notes|default:"-" }}</td>
+
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{% url 'sticker_size_edit' row.id %}" class="sizes-icon-btn edit" title="Edit">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+
+                                <a href="{% url 'sticker_size_delete' row.id %}" class="sizes-icon-btn delete" title="Delete">
+                                    <i class="bi bi-trash3"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted fw-bold">
+                            No sticker sizes found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function () {
+    $('#sizesTable').DataTable({
+        pageLength: 10,
+        lengthMenu: [[10,25,50,100,-1],[10,25,50,100,"All"]],
+        responsive: true,
+        autoWidth: false,
+        ordering: true,
+        order: [[0,'asc']],
+        language:{
+            search:"Search:",
+            lengthMenu:"Show _MENU_ rows",
+            info:"Showing _START_ to _END_ of _TOTAL_ sizes",
+            paginate:{
+                previous:"Prev",
+                next:"Next"
+            }
+        },
+        columnDefs:[
+            { targets:-1, orderable:false, searchable:false }
+        ]
+    });
+});
+</script>
+{% endblock %}

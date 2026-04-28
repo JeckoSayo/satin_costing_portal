@@ -1,0 +1,152 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="figma-dashboard">
+
+  <div class="figma-page-head">
+    <div>
+      <h1 class="page-title mb-1">Edit Sale</h1>
+      <p class="page-subtitle mb-0">
+        Update customer, platform, payment, and shipping details.
+      </p>
+    </div>
+  </div>
+
+  <div class="figma-card sale-edit-card">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="order-details-grid sale-edit-grid">
+
+        <div class="order-section-title full">
+          <i class="bi bi-person-lines-fill me-1"></i>
+          Customer & Order
+        </div>
+
+        <div class="figma-field">
+          <label>Customer Name</label>
+          {{ form.customer_name }}
+        </div>
+
+        <div class="figma-field">
+          <label>Product / Order</label>
+          {{ form.order_name }}
+        </div>
+
+        <div class="figma-field">
+            <label>Sticker Size</label>
+            <input type="text"
+                    class="form-control figma-control readonly-field"
+                    value="{{ object.sticker_size }}"
+                    readonly>
+            </div>
+
+            <div class="figma-field">
+            <label>Quantity</label>
+            <input type="text"
+                    class="form-control figma-control readonly-field"
+                    value="{{ object.quantity }}"
+                    readonly>
+        </div>
+
+        <div class="order-section-title full">
+          <i class="bi bi-credit-card me-1"></i>
+          Sales & Payment
+        </div>
+
+        <div class="figma-field">
+          <label>Sales Channel</label>
+          {{ form.platform }}
+        </div>
+
+        <div class="figma-field">
+          <label>Payment Method</label>
+          {{ form.payment_method }}
+        </div>
+
+        <div class="figma-field">
+          <label>Status</label>
+          {{ form.status }}
+        </div>
+
+        <div class="order-section-title full">
+          <i class="bi bi-truck me-1"></i>
+          Shipping / Platform Details
+        </div>
+
+        <div class="figma-field">
+          <label>Platform Order ID</label>
+          {{ form.platform_order_id }}
+        </div>
+
+        <div class="figma-field">
+          <label>Tracking Number</label>
+          {{ form.tracking_number }}
+        </div>
+
+        <div class="figma-field">
+          <label>Courier</label>
+          {{ form.courier }}
+        </div>
+
+        <div class="figma-field">
+          <label>Buyer Username</label>
+          {{ form.buyer_username }}
+        </div>
+
+        <div class="figma-field">
+          <label>Buyer Phone</label>
+          {{ form.buyer_phone }}
+        </div>
+
+        <div class="figma-field">
+          <label>Weight Grams</label>
+          {{ form.weight_grams }}
+        </div>
+
+        <div class="figma-field full">
+          <label>Shipping Address</label>
+          {{ form.shipping_address }}
+        </div>
+
+        <div class="figma-field full">
+          <label>Notes</label>
+          {{ form.notes }}
+        </div>
+
+        <div class="order-section-title full">
+          <i class="bi bi-kanban me-1"></i>
+          V3.4 Job / Payment Operations
+        </div>
+
+        {% if form.job_status %}
+        <div class="figma-field"><label>Job Status</label>{{ form.job_status }}</div>
+        <div class="figma-field"><label>Due Date</label>{{ form.due_date }}</div>
+        <div class="figma-field"><label>Rush Order</label><div class="form-check">{{ form.rush_order }}</div></div>
+        <div class="figma-field"><label>Deposit Amount</label>{{ form.deposit_amount }}</div>
+        <div class="figma-field"><label>Manual Override Price</label>{{ form.override_price }}</div>
+        <div class="figma-field full"><label>Override Reason</label>{{ form.override_reason }}</div>
+        <div class="figma-field full"><label>Internal Job Notes</label>{{ form.internal_job_notes }}</div>
+        {% endif %}
+
+      </div>
+
+      <div class="figma-action-row">
+        <a href="{% url 'sales_log' %}" class="btn figma-clear-btn">
+          <i class="bi bi-arrow-left me-1"></i>
+          Cancel
+        </a>
+
+        <button type="submit" class="btn figma-log-btn">
+          <i class="bi bi-check2-circle me-1"></i>
+          Save Changes
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}
