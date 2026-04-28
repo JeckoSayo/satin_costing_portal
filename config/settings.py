@@ -3,6 +3,7 @@ import dj_database_url
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_SECRET_KEY = 'django-insecure-_=8+xc%0l7*lf-3hfuf*)1zsm^7fmdb1mar76#$wxgt821ftbw'
 SECRET_KEY = os.environ.get("SECRET_KEY", DEFAULT_SECRET_KEY)
 DEBUG = os.environ.get("RENDER") != "true"
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'testserver']
