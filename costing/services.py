@@ -251,6 +251,18 @@ def calculate_quote(data):
         "profit_margin": money(profit_margin),
         "price_per_piece": money(price_per_piece),
         "profit_per_piece": money(profit_per_piece),
+
+        # Simple costing summary aligned with the tutorial formula:
+        # SRP = Materials + Labor + Overhead + Profit.
+        # This is saved in Sales Log cost_breakdown so logged sales,
+        # receipts, and inventory deduction all use the same computed values.
+        "simple_costing_summary": {
+            "materials": money(total_material_cost),
+            "labor": money(total_labor_cost),
+            "overhead": money(total_additional_cost),
+            "profit": money(profit),
+            "srp": money(product_sale_price),
+        },
     }
 
 
@@ -313,6 +325,9 @@ def create_sale_from_order_items(payload):
     cost = Decimal("0")
     platform_fee = Decimal("0")
     profit = Decimal("0")
+    simple_materials_total = Decimal("0")
+    simple_labor_total = Decimal("0")
+    simple_overhead_total = Decimal("0")
 
     for item in items:
         quote_data = {
@@ -337,8 +352,14 @@ def create_sale_from_order_items(payload):
         cost += D(result["total_product_cost"])
         platform_fee += D(result["marketplace_fee"])
         profit += D(result["profit"])
+        simple_summary = result.get("simple_costing_summary", {})
+        simple_materials_total += D(simple_summary.get("materials"), "0")
+        simple_labor_total += D(simple_summary.get("labor"), "0")
+        simple_overhead_total += D(simple_summary.get("overhead"), "0")
 
     profit -= order_discount
+    simple_srp_total = selling_price
+    simple_profit_total = profit
 
     sale = SaleLog.objects.create(
         customer_name=payload.get("customer_name", ""),
@@ -369,7 +390,23 @@ def create_sale_from_order_items(payload):
         override_reason=payload.get("override_reason", ""),
         internal_job_notes=payload.get("internal_job_notes", ""),
         notes=payload.get("notes", "Logged from V3.4 daily operations engine"),
-        cost_breakdown=serialize_for_jsonfield({"version": "v3.4_daily_operations", "items": [r for _, r in computed_items]}),
+        cost_breakdown=serialize_for_jsonfield({
+            "version": "v3.4_daily_operations",
+            "simple_costing_summary": {
+                "materials": money(simple_materials_total),
+                "labor": money(simple_labor_total),
+                "overhead": money(simple_overhead_total),
+                "profit": money(simple_profit_total),
+                "srp": money(simple_srp_total),
+            },
+            "inventory_sync": {
+                "stock_deducted": _stock_is_deductible_status(status),
+                "deducts_materials": True,
+                "deducts_lamination": True,
+                "deducts_packaging": True,
+            },
+            "items": [r for _, r in computed_items],
+        }),
     )
 
     for index, (item, result) in enumerate(computed_items, start=1):

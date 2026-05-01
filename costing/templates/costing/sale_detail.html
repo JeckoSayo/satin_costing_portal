@@ -33,6 +33,24 @@
     </div>
   </div>
 
+  {% with simple=sale.cost_breakdown.simple_costing_summary inventory=sale.cost_breakdown.inventory_sync %}
+    {% if simple %}
+      <div class="figma-card mb-4">
+        <h2>Simple Costing Summary</h2>
+        <div class="figma-metric-list">
+          <div><span>Materials</span><strong>₱{{ simple.materials|floatformat:2 }}</strong></div>
+          <div><span>Labor</span><strong>₱{{ simple.labor|floatformat:2 }}</strong></div>
+          <div><span>Overhead</span><strong>₱{{ simple.overhead|floatformat:2 }}</strong></div>
+          <div class="metric-yellow"><span>Profit</span><strong>₱{{ simple.profit|floatformat:2 }}</strong></div>
+          <div class="metric-blue"><span>SRP</span><strong>₱{{ simple.srp|floatformat:2 }}</strong></div>
+        </div>
+        <p class="text-muted mb-0 mt-2">
+          Inventory sync: {% if inventory.stock_deducted %}Materials, lamination, and packaging were deducted from stock.{% else %}No stock deduction was applied for this status.{% endif %}
+        </p>
+      </div>
+    {% endif %}
+  {% endwith %}
+
   <div class="figma-action-row mb-4">
     <a href="{% url 'sale_edit' sale.pk %}" class="btn figma-log-btn"><i class="bi bi-pencil me-1"></i>Edit Operations</a>
     <a href="{% url 'job_ticket' sale.pk %}" class="btn figma-clear-btn"><i class="bi bi-printer me-1"></i>Job Ticket</a>

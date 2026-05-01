@@ -109,6 +109,11 @@
 
         <div class="figma-metric-list">
           <div><span>Total Product Cost</span><strong id="totalProductCost">₱0.00</strong></div>
+          <div><span>Materials</span><strong id="simpleMaterialsCost">₱0.00</strong></div>
+          <div><span>Labor</span><strong id="simpleLaborCost">₱0.00</strong></div>
+          <div><span>Overhead</span><strong id="simpleOverheadCost">₱0.00</strong></div>
+          <div class="metric-yellow"><span>Profit</span><strong id="simpleProfitCost">₱0.00</strong></div>
+          <div class="metric-blue"><span>Simple SRP</span><strong id="simpleSrpCost">₱0.00</strong></div>
           <div><span>Markup Price</span><strong id="markupPrice">₱0.00</strong></div>
           <div><span>Margin Price</span><strong id="marginPrice">₱0.00</strong></div>
           <div><span>Target Sale Price</span><strong id="targetSalePriceResult">₱0.00</strong></div>
@@ -428,6 +433,11 @@
                 <div class="figma-field">
                   <label>Base Handling Fee</label>
                   <input type="number" id="baseHandlingFee" class="form-control figma-control readonly-field" value="{{ settings.base_handling_fee|default:10 }}" readonly>
+                </div>
+
+                <div class="figma-field">
+                  <label>Labor Rate / Hour</label>
+                  <input type="number" id="laborRate" class="form-control figma-control readonly-field" value="{{ settings.labor_rate_per_hour|default:80 }}" readonly>
                 </div>
 
                 <div class="figma-field">
@@ -1021,7 +1031,7 @@ function calculateQuote() {
   const shippingFee = numberValue("shippingFee");
 
   const inkCostPerSheet = numberValue("inkCost");
-  const laborRate = 0;
+  const laborRate = numberValue("laborRate");
   const laborMinutes = numberValue("laborMinutes");
   const baseHandlingFee = numberValue("baseHandlingFee");
   const laborPerSheet = numberValue("laborPerSheet");
@@ -1071,7 +1081,7 @@ function calculateQuote() {
 
   const laborPerSheetTotal = sheetsNeeded * laborPerSheet;
   const bladeWearTotal = sheetsNeeded * bladeWearPerSheet;
-  const manualExtraLabor = laborMinutes > 0 ? (80 / 60) * laborMinutes : 0;
+  const manualExtraLabor = laborMinutes > 0 ? (laborRate / 60) * laborMinutes : 0;
   const laborTotal = baseHandlingFee + laborPerSheetTotal + bladeWearTotal + manualExtraLabor;
   const smartSetupFee = smartPricing.setupFee || 0;
   const cutComplexityFee = smartPricing.complexityFee || 0;
@@ -1133,6 +1143,12 @@ function calculateQuote() {
   setText("profit", money(profit));
   setText("profitMargin", profitMargin.toFixed(1) + "%");
 
+  setText("simpleMaterialsCost", money(totalMaterialCost));
+  setText("simpleLaborCost", money(laborTotal));
+  setText("simpleOverheadCost", money(totalAdditionalCost));
+  setText("simpleProfitCost", money(profit));
+  setText("simpleSrpCost", money(productSalePrice));
+
   setText("materialQty", sheetsNeeded);
   setText("materialUnitPrice", money(materialUnitCost));
   setText("materialTotal", money(materialTotal));
@@ -1153,8 +1169,8 @@ function calculateQuote() {
   setText("safetyBufferTotal", money(safetyBufferAmount));
   setText("totalMaterialCost", money(totalMaterialCost));
 
-  setText("laborMinutesText", "Auto: " + money(baseHandlingFee + laborPerSheetTotal + bladeWearTotal) + (laborMinutes ? " + extra " + laborMinutes + " min" : ""));
-  setText("laborRateText", money(laborPerSheet) + "/sheet + " + money(bladeWearPerSheet) + " blade");
+  setText("laborMinutesText", "Auto: " + money(baseHandlingFee + laborPerSheetTotal + bladeWearTotal) + (laborMinutes ? " + extra " + laborMinutes + " min @ " + money(laborRate) + "/hr" : ""));
+  setText("laborRateText", money(laborPerSheet) + "/sheet + " + money(bladeWearPerSheet) + " blade + " + money(laborRate) + "/hr manual");
   setText("laborTotal", money(laborTotal));
 
   setText("additionalDirectCostTotal", money(additionalDirectCost + machineOverhead + smartSetupFee + cutComplexityFee));
