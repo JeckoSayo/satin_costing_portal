@@ -2438,3 +2438,20 @@ table.dataTable td:last-child{
   pointer-events: auto !important;
   position: static !important;
 }
+
+/* Simple Costing detailed breakdown */
+.figma-metric-list .metric-section-title {
+  background: transparent;
+  border: 0;
+  padding: 0.35rem 0.2rem 0.2rem;
+  margin-top: 0.35rem;
+  color: #6b7280;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.figma-metric-list .metric-section-title span,
+.figma-metric-list .metric-section-title strong {
+  color: #6b7280;
+  font-weight: 800;
+}

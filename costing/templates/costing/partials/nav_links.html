@@ -8,6 +8,11 @@
   <span>Quote Calculator</span>
 </a>
 
+<a href="{% url 'simple_costing_calculator' %}" class="nav-link {% if request.resolver_match.url_name == 'simple_costing_calculator' %}active{% endif %}">
+  <i class="bi bi-receipt"></i>
+  <span>Simple Costing</span>
+</a>
+
 <a href="{% url 'fast_pos' %}" class="nav-link {% if request.resolver_match.url_name == 'fast_pos' or request.resolver_match.url_name == 'pos_products' %}active{% endif %}">
   <i class="bi bi-shop"></i>
   <span>Fast POS</span>

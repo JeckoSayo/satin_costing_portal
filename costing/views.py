@@ -154,6 +154,34 @@ class FullQuoteCalculatorView(DashboardView):
     template_name = "costing/full_quote_calculator.html"
 
 
+class SimpleCostingCalculatorView(TemplateView):
+    template_name = "costing/simple_costing_calculator.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        settings, _ = PriceSetting.objects.get_or_create(id=1)
+        ctx["settings"] = settings
+
+        # Keep the Simple Costing page connected to the same data source as
+        # the full Quote Calculator. This prevents mismatched pricing between
+        # the simple and advanced calculators.
+        ctx["sticker_sizes"] = StickerSize.objects.filter(is_active=True)
+        ctx["main_materials"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_STICKER,
+        )
+        ctx["laminations"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_LAMINATION,
+        )
+        ctx["packagings"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_PACKAGING,
+        )
+        ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
+        return ctx
+
+
 class CalculateQuoteView(View):
     def post(self, request, *args, **kwargs):
         try:

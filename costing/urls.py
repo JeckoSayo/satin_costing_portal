@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    DashboardView, FullQuoteCalculatorView, CalculateQuoteView, LogSaleView,
+    DashboardView, FullQuoteCalculatorView, SimpleCostingCalculatorView, CalculateQuoteView, LogSaleView,
     MaterialListView, MaterialCreateView, MaterialUpdateView, MaterialDeleteView, BulkMaterialDeleteView,
     StickerSizeListView, StickerSizeCreateView, StickerSizeUpdateView, StickerSizeDeleteView,
     PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
@@ -11,6 +11,7 @@ from .views import (
 urlpatterns = [
     path('', DashboardView.as_view(), name='dashboard'),
     path('quote-calculator/', FullQuoteCalculatorView.as_view(), name='quote_calculator'),
+    path('simple-costing/', SimpleCostingCalculatorView.as_view(), name='simple_costing_calculator'),
     path('calculate-quote/', CalculateQuoteView.as_view(), name='calculate_quote'),
     path('log-sale/', LogSaleView.as_view(), name='log_sale'),
     path('sales/', SalesLogView.as_view(), name='sales_log'),

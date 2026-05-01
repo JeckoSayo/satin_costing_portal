@@ -1,17 +1,23 @@
-# Django
+# Django / local database
 db.sqlite3
-*.log
+*.sqlite3
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
 
-# Environment
+# Environment / secrets
 .env
+.env.*
 
-# Static / media (optional)
-media/
+# Logs
+*.log
+
+# Build outputs
 staticfiles/
+media/
 
-# VS Code
+# Editors
 .vscode/
+.idea/

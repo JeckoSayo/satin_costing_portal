@@ -1,0 +1,454 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+<div class="figma-dashboard">
+  <div class="figma-page-head">
+    <div>
+      <h1 class="page-title mb-1">Simple Costing Calculator</h1>
+      <p class="page-subtitle mb-0">
+        A simplified costing screen connected to the same Materials Master, Sticker Sizes, and pricing engine used by the Quote Calculator.
+      </p>
+    </div>
+  </div>
+
+  <div class="alert alert-info border-0 shadow-sm mb-4">
+    <strong>Connected mode:</strong> Select your actual paper, sticker size, photo top/lamination, and OPP bag/packaging below.
+    The system will compute sheets needed, material usage, labor, overhead, profit, SRP, and rounded SRP using the same backend as your Quote Calculator.
+  </div>
+
+  <div class="figma-kpi-grid">
+    <div class="figma-kpi-card kpi-blue">
+      <div class="figma-kpi-icon"><i class="bi bi-box-seam"></i></div>
+      <span>Materials</span>
+      <strong id="kpiMaterials">₱0.00</strong>
+    </div>
+    <div class="figma-kpi-card kpi-pink">
+      <div class="figma-kpi-icon"><i class="bi bi-person-workspace"></i></div>
+      <span>Labor</span>
+      <strong id="kpiLabor">₱0.00</strong>
+    </div>
+    <div class="figma-kpi-card kpi-yellow">
+      <div class="figma-kpi-icon"><i class="bi bi-lightning-charge"></i></div>
+      <span>Overhead</span>
+      <strong id="kpiOverhead">₱0.00</strong>
+    </div>
+    <div class="figma-kpi-card kpi-green">
+      <div class="figma-kpi-icon"><i class="bi bi-cash-coin"></i></div>
+      <span>SRP</span>
+      <strong id="kpiSrp">₱0.00</strong>
+    </div>
+  </div>
+
+  <div class="figma-main-grid mt-4">
+    <div class="figma-card">
+      <h2>Product Setup</h2>
+      <p class="text-muted mb-3">Use the same item setup as the Quote Calculator, but with fewer fields.</p>
+      <div class="order-details-grid">
+        <div class="figma-field">
+          <label>Product / Order Name</label>
+          <input type="text" id="orderName" class="form-control figma-control" value="Sticker Set" placeholder="Example: Sticker Set">
+        </div>
+        <div class="figma-field">
+          <label>Quantity Ordered</label>
+          <input type="number" id="quantity" class="form-control figma-control" value="30" step="1" min="0">
+        </div>
+        <div class="figma-field">
+          <label>Sticker Size</label>
+          <select id="stickerSize" class="form-select figma-control">
+            <option value="">Select size</option>
+            {% for size in sticker_sizes %}
+              <option value="{{ size.id }}" data-per-sheet="{{ size.best_for_costing }}">
+                {{ size.name }} — {{ size.best_for_costing }} pcs/sheet
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">This controls how many print sheets are needed.</small>
+        </div>
+        <div class="figma-field">
+          <label>Platform</label>
+          <select id="platform" class="form-select figma-control">
+            {% for value, label in platform_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="figma-card">
+      <h2>Materials from Materials Master</h2>
+      <p class="text-muted mb-3">Paper, phototop/lamination, OPP bag, and ink are pulled into the same quote engine.</p>
+      <div class="order-details-grid">
+        <div class="figma-field">
+          <label>Paper / Main Material</label>
+          <select id="materialId" class="form-select figma-control">
+            <option value="">No paper selected</option>
+            {% for material in main_materials %}
+              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}">
+                {{ material.item_name }} — ₱{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="figma-field">
+          <label>Photo Top / Lamination</label>
+          <select id="laminationId" class="form-select figma-control">
+            <option value="">None</option>
+            {% for material in laminations %}
+              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}">
+                {{ material.item_name }} — ₱{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="figma-field">
+          <label>OPP Bag / Packaging</label>
+          <select id="packagingId" class="form-select figma-control">
+            <option value="">None</option>
+            {% for material in packagings %}
+              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}" data-capacity="{{ material.packaging_capacity|default:1 }}">
+                {{ material.item_name }} — ₱{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="figma-field">
+          <label>Ink Cost / Sheet</label>
+          <input type="number" id="inkCostPerSheet" class="form-control figma-control" value="{{ settings.default_ink_cost_per_sheet|floatformat:2 }}" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="figma-card">
+      <h2>Labor + Extra Costs</h2>
+      <p class="text-muted mb-3">Labor rate, sheet labor, and machine overhead still come from Pricing Defaults.</p>
+      <div class="order-details-grid">
+        <div class="figma-field">
+          <label>Extra Labor Minutes</label>
+          <input type="number" id="laborMinutes" class="form-control figma-control" value="15" step="1" min="0">
+          <small class="text-muted">Uses labor rate/hour from Pricing Defaults.</small>
+        </div>
+        <div class="figma-field">
+          <label>Additional Direct Cost</label>
+          <input type="number" id="additionalDirectCost" class="form-control figma-control" value="{{ settings.additional_direct_cost|floatformat:2 }}" step="0.01" min="0">
+        </div>
+        <div class="figma-field">
+          <label>Design Fee</label>
+          <input type="number" id="designFee" class="form-control figma-control" value="0.00" step="0.01" min="0">
+        </div>
+        <div class="figma-field">
+          <label>Target Sale Price</label>
+          <input type="number" id="targetSalePrice" class="form-control figma-control" value="0.00" step="0.01" min="0">
+        </div>
+      </div>
+    </div>
+
+    <div class="figma-card price-card">
+      <h2>Simple Costing Result</h2>
+      <div class="figma-metric-list">
+        <div><span>Sticker Size</span><strong id="selectedSizeText">-</strong></div>
+        <div><span>Print Sheets Needed</span><strong id="sheetsNeeded">0</strong></div>
+        <div><span>Costing Qty / Sheet</span><strong id="costingQtyPerSheet">0</strong></div>
+        <div class="metric-section-title"><span>Basic Materials Cost</span><strong></strong></div>
+        <div><span>Paper</span><strong id="paperMaterialCost">₱0.00</strong></div>
+        <div><span>Ink</span><strong id="inkMaterialCost">₱0.00</strong></div>
+        <div><span>Photo Top / Lamination</span><strong id="laminationMaterialCost">₱0.00</strong></div>
+        <div><span>OPP / Packaging</span><strong id="packagingMaterialCost">₱0.00</strong></div>
+        <div class="metric-blue"><span>Your Calculation</span><strong id="rawMaterialsResult">₱0.00</strong></div>
+
+        <div class="metric-section-title mt-2"><span>System Adds</span><strong id="systemAddsTotal">₱0.00</strong></div>
+        <div><span>Safety Buffer</span><strong id="safetyBufferCost">₱0.00</strong></div>
+        <div><span>Waste Buffer</span><strong id="wasteBufferCost">₱0.00</strong></div>
+        <div class="metric-pink"><span>Total Materials</span><strong id="materialsResult">₱0.00</strong></div>
+
+        <div class="metric-section-title mt-2"><span>Full Cost Summary</span><strong></strong></div>
+        <div><span>Labor</span><strong id="laborResult">₱0.00</strong></div>
+        <div><span>Overhead</span><strong id="overheadResult">₱0.00</strong></div>
+        <div><span>Base Cost</span><strong id="baseCostResult">₱0.00</strong></div>
+        <div class="metric-yellow"><span>Profit</span><strong id="profitResult">₱0.00</strong></div>
+        <div class="metric-blue"><span>SRP</span><strong id="srpResult">₱0.00</strong></div>
+        <div class="metric-pink"><span>Rounded / Recommended SRP</span><strong id="roundedSrpResult">₱0.00</strong></div>
+        <div><span>Price / Piece</span><strong id="pricePerPiece">₱0.00</strong></div>
+        <div><span>Profit Margin</span><strong id="profitMargin">0.00%</strong></div>
+      </div>
+      <button type="button" class="btn figma-log-btn mt-3" onclick="copySimpleQuote()">
+        <i class="bi bi-clipboard me-1"></i> Copy Costing Summary
+      </button>
+    </div>
+  </div>
+
+  <div class="figma-card mt-4">
+    <h2>Usage Preview</h2>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="alert alert-light border mb-0">
+          <strong>Paper Usage</strong><br>
+          <span id="paperUsageText">0 sheet(s)</span>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="alert alert-light border mb-0">
+          <strong>Photo Top / Lamination Usage</strong><br>
+          <span id="laminationUsageText">0 sheet(s)</span>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="alert alert-light border mb-0">
+          <strong>OPP / Packaging Usage</strong><br>
+          <span id="packagingUsageText">0 pc(s)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="figma-card mt-4">
+    <h2>Formula Guide</h2>
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="alert alert-light border mb-0">
+          <strong>Simple Display</strong><br>
+          Materials + Labor + Overhead + Profit = SRP
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="alert alert-light border mb-0">
+          <strong>Same Engine as Quote Calculator</strong><br>
+          Includes sheets needed, ink, safety buffer, waste buffer, labor, blade wear, machine overhead, markup/margin protection, and rounding.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+  const csrfToken = '{{ csrf_token }}';
+  const ids = [
+    'orderName', 'quantity', 'stickerSize', 'platform',
+    'materialId', 'laminationId', 'packagingId', 'inkCostPerSheet',
+    'laborMinutes', 'additionalDirectCost', 'designFee', 'targetSalePrice'
+  ];
+
+  function value(id) {
+    const element = document.getElementById(id);
+    return element ? element.value : '';
+  }
+
+  function text(id, content) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = content;
+  }
+
+  function numericAmount(amount) {
+    if (typeof amount === 'number') return Number.isFinite(amount) ? amount : 0;
+    const cleaned = String(amount || '0').replace(/[^0-9.-]/g, '');
+    const parsed = parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function money(id, amount) {
+    text(id, peso.format(numericAmount(amount)));
+  }
+
+  function getSelectedText(id) {
+    const select = document.getElementById(id);
+    if (!select || select.selectedIndex < 0) return '';
+    return select.options[select.selectedIndex].text.trim();
+  }
+
+  function updateEmptyState(message) {
+    const zeroMoneyFields = [
+      'kpiMaterials', 'kpiLabor', 'kpiOverhead', 'kpiSrp',
+      'materialsResult', 'laborResult', 'overheadResult', 'baseCostResult',
+      'profitResult', 'srpResult', 'roundedSrpResult', 'pricePerPiece',
+      'paperMaterialCost', 'inkMaterialCost', 'laminationMaterialCost',
+      'packagingMaterialCost', 'rawMaterialsResult', 'systemAddsTotal',
+      'safetyBufferCost', 'wasteBufferCost'
+    ];
+    zeroMoneyFields.forEach(id => money(id, 0));
+    text('selectedSizeText', message || '-');
+    text('sheetsNeeded', '0');
+    text('costingQtyPerSheet', '0');
+    text('profitMargin', '0.00%');
+    text('paperUsageText', '0 sheet(s)');
+    text('laminationUsageText', '0 sheet(s)');
+    text('packagingUsageText', '0 pc(s)');
+  }
+
+  function applyResult(result) {
+    const simple = result.simple_costing_summary || {};
+    const materialItems = result.material_items || {};
+    const paperCost = numericAmount(materialItems.selected_material?.total);
+    const inkCost = numericAmount(materialItems.ink_usage?.total);
+    const laminationCost = numericAmount(materialItems.selected_lamination?.total);
+    const packagingCost = numericAmount(materialItems.selected_packaging?.total);
+    const safetyBuffer = numericAmount(materialItems.safety_buffer?.total);
+    const wasteBuffer = numericAmount(materialItems.waste_buffer?.total);
+    const rawMaterials = paperCost + inkCost + laminationCost + packagingCost;
+    const systemAdds = safetyBuffer + wasteBuffer;
+
+    const materials = numericAmount(result.total_material_cost || simple.materials || 0);
+    const labor = numericAmount(result.total_labor_cost || simple.labor || 0);
+    const overhead = numericAmount(result.total_additional_cost || simple.overhead || 0);
+    const baseCost = numericAmount(result.total_product_cost || 0);
+    const profit = numericAmount(result.profit || simple.profit || 0);
+    const srp = numericAmount(result.product_sale_price || simple.srp || 0);
+
+    money('kpiMaterials', materials);
+    money('kpiLabor', labor);
+    money('kpiOverhead', overhead);
+    money('kpiSrp', srp);
+    money('paperMaterialCost', paperCost);
+    money('inkMaterialCost', inkCost);
+    money('laminationMaterialCost', laminationCost);
+    money('packagingMaterialCost', packagingCost);
+    money('rawMaterialsResult', rawMaterials);
+    money('safetyBufferCost', safetyBuffer);
+    money('wasteBufferCost', wasteBuffer);
+    money('systemAddsTotal', systemAdds);
+    money('materialsResult', materials);
+    money('laborResult', labor);
+    money('overheadResult', overhead);
+    money('baseCostResult', baseCost);
+    money('profitResult', profit);
+    money('srpResult', srp);
+    money('roundedSrpResult', result.recommended_base_price || srp);
+    money('pricePerPiece', result.price_per_piece || 0);
+    text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
+
+    text('selectedSizeText', result.sticker_size || getSelectedText('stickerSize') || '-');
+    text('sheetsNeeded', result.sheets_needed || 0);
+    text('costingQtyPerSheet', result.costing_qty_per_sheet || 0);
+
+    const stockPlan = result.stock_plan || {};
+    text('paperUsageText', `${stockPlan.material_qty_used || 0} sheet(s)`);
+    text('laminationUsageText', `${stockPlan.lamination_qty_used || 0} sheet(s)`);
+    text('packagingUsageText', `${stockPlan.packaging_qty_used || 0} pc(s)`);
+
+    window.simpleCostingSummary = {
+      orderName: value('orderName'),
+      size: result.sticker_size || getSelectedText('stickerSize') || '-',
+      paper: getSelectedText('materialId') || '-',
+      lamination: getSelectedText('laminationId') || 'None',
+      packaging: getSelectedText('packagingId') || 'None',
+      quantity: result.quantity || value('quantity') || 0,
+      sheetsNeeded: result.sheets_needed || 0,
+      materials, labor, overhead, baseCost, profit, srp,
+      roundedSrp: numericAmount(result.recommended_base_price || srp || 0),
+      pricePerPiece: numericAmount(result.price_per_piece || 0),
+      profitMargin: numericAmount(result.profit_margin || 0),
+      paperCost, inkCost, laminationCost, packagingCost, rawMaterials, safetyBuffer, wasteBuffer, systemAdds
+    };
+  }
+
+  let calculateTimer = null;
+  function scheduleCalculation() {
+    clearTimeout(calculateTimer);
+    calculateTimer = setTimeout(calculateSimpleCosting, 250);
+  }
+
+  async function calculateSimpleCosting() {
+    const stickerSizeId = value('stickerSize');
+    const quantity = parseInt(value('quantity') || '0', 10);
+
+    if (!stickerSizeId || quantity <= 0) {
+      updateEmptyState('Select size and quantity');
+      return;
+    }
+
+    const payload = {
+      sticker_size_id: stickerSizeId,
+      quantity: quantity,
+      material_id: value('materialId') || '',
+      lamination_id: value('laminationId') || '',
+      packaging_id: value('packagingId') || '',
+      ink_cost_per_sheet: value('inkCostPerSheet') || 0,
+      labor_minutes: value('laborMinutes') || 0,
+      additional_direct_cost: value('additionalDirectCost') || 0,
+      target_sale_price: value('targetSalePrice') || 0,
+      design_fee: value('designFee') || 0,
+      shipping_fee: 0,
+      rush_percent: 0,
+      platform: value('platform') || 'Walk-in'
+    };
+
+    try {
+      const response = await fetch('{% url "calculate_quote" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        console.error('Simple costing error:', data);
+        updateEmptyState('Please check required fields');
+        return;
+      }
+
+      applyResult(data.result);
+    } catch (error) {
+      console.error('Simple costing request failed:', error);
+      updateEmptyState('Could not calculate');
+    }
+  }
+
+  window.copySimpleQuote = function () {
+    const summary = window.simpleCostingSummary || {};
+    const textLines = [
+      'Simple Costing Summary',
+      `Order: ${summary.orderName || '-'}`,
+      `Size: ${summary.size || '-'}`,
+      `Quantity: ${summary.quantity || 0}`,
+      `Paper: ${summary.paper || '-'}`,
+      `Photo Top / Lamination: ${summary.lamination || 'None'}`,
+      `OPP / Packaging: ${summary.packaging || 'None'}`,
+      `Print Sheets Needed: ${summary.sheetsNeeded || 0}`,
+      'Materials Breakdown:',
+      `- Paper: ${peso.format(summary.paperCost || 0)}`,
+      `- Ink: ${peso.format(summary.inkCost || 0)}`,
+      `- Photo Top / Lamination: ${peso.format(summary.laminationCost || 0)}`,
+      `- OPP / Packaging: ${peso.format(summary.packagingCost || 0)}`,
+      `Your Calculation: ${peso.format(summary.rawMaterials || 0)}`,
+      'System Adds:',
+      `- Safety Buffer: ${peso.format(summary.safetyBuffer || 0)}`,
+      `- Waste Buffer: ${peso.format(summary.wasteBuffer || 0)}`,
+      `System Adds Total: ${peso.format(summary.systemAdds || 0)}`,
+      `Total Materials: ${peso.format(summary.materials || 0)}`,
+      `Labor: ${peso.format(summary.labor || 0)}`,
+      `Overhead: ${peso.format(summary.overhead || 0)}`,
+      `Base Cost: ${peso.format(summary.baseCost || 0)}`,
+      `Profit: ${peso.format(summary.profit || 0)}`,
+      `SRP: ${peso.format(summary.srp || 0)}`,
+      `Rounded SRP: ${peso.format(summary.roundedSrp || 0)}`,
+      `Price / Piece: ${peso.format(summary.pricePerPiece || 0)}`,
+      `Profit Margin: ${(summary.profitMargin || 0).toFixed(2)}%`
+    ];
+    const textToCopy = textLines.join('\n');
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      alert('Simple costing summary copied.');
+    }).catch(() => {
+      alert(textToCopy);
+    });
+  };
+
+  ids.forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.addEventListener('input', scheduleCalculation);
+      element.addEventListener('change', scheduleCalculation);
+    }
+  });
+
+  updateEmptyState('Select size and quantity');
+  scheduleCalculation();
+})();
+</script>
+{% endblock %}
