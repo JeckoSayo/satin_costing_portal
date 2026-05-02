@@ -49,6 +49,10 @@
           <input type="text" id="orderName" class="form-control figma-control" value="" placeholder="Example: Sticker Set">
         </div>
         <div class="figma-field">
+          <label>Customer Name</label>
+          <input type="text" id="customerName" class="form-control figma-control" placeholder="Enter customer name">
+        </div>
+        <div class="figma-field">
           <label>Quantity Ordered</label>
           <input type="number" id="quantity" class="form-control figma-control" value="" placeholder="50" step="1" min="0">
         </div>
@@ -71,6 +75,23 @@
           <label>Platform</label>
           <select id="platform" class="form-select figma-control">
             {% for value, label in platform_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="figma-field">
+          <label>Payment Method</label>
+          <select id="paymentMethod" class="form-select figma-control">
+            {% for value, label in payment_choices %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="figma-field">
+          <label>Order Status</label>
+          <select id="orderStatus" class="form-select figma-control">
+            {% for value, label in status_choices %}
               <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
           </select>
@@ -191,6 +212,53 @@
       <button type="button" class="btn figma-log-btn mt-3" onclick="copySimpleQuote()">
         <i class="bi bi-clipboard me-1"></i> Copy Costing Summary
       </button>
+      <button type="button" class="btn figma-log-btn mt-2" onclick="addSimpleItemToOrder()">
+        <i class="bi bi-plus-circle me-1"></i> Add Item to Order
+      </button>
+
+      <button type="button" class="btn btn-success mt-2" onclick="logSimpleOrder()">
+        <i class="bi bi-receipt me-1"></i> Log Order
+      </button>
+    </div>
+  </div>
+
+    <div class="figma-card mt-4">
+    <h2>Order Items</h2>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product</th>
+            <th>Size</th>
+            <th>Qty</th>
+            <th>Sheets</th>
+            <th>Unit Price</th>
+            <th>Line Total</th>
+            <th>Cost</th>
+            <th>Profit</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="simpleOrderItemsBody">
+          <tr>
+            <td colspan="10" class="text-center text-muted py-3">No items added yet.</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="3">Order Total</th>
+            <th id="simpleOrderTotalQty">0</th>
+            <th></th>
+            <th></th>
+            <th id="simpleOrderSubtotal">₱0.00</th>
+            <th id="simpleOrderTotalCost">₱0.00</th>
+            <th id="simpleOrderTotalProfit">₱0.00</th>
+            <th></th>
+          </tr>
+        </tfoot>
+      </table>
     </div>
   </div>
 
@@ -243,11 +311,17 @@
 (function () {
   const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
   const csrfToken = '{{ csrf_token }}';
+
   const ids = [
-    'orderName', 'quantity', 'stickerSize', 'platform', 'cricutCut',
-    'materialId', 'laminationId', 'packagingId', 'packagingCapacity', 'inkCostPerSheet',
-    'laborMinutes', 'additionalDirectCost', 'designFee', 'targetSalePrice'
+    'orderName', 'customerName', 'quantity', 'stickerSize', 'platform',
+    'paymentMethod', 'orderStatus', 'cricutCut',
+    'materialId', 'laminationId', 'packagingId', 'packagingCapacity',
+    'inkCostPerSheet', 'laborMinutes', 'additionalDirectCost',
+    'designFee', 'targetSalePrice'
   ];
+
+  let calculateTimer = null;
+  let simpleOrderItems = [];
 
   function value(id) {
     const element = document.getElementById(id);
@@ -308,7 +382,9 @@
       'packagingMaterialCost', 'rawMaterialsResult', 'systemAddsTotal',
       'safetyBufferCost', 'wasteBufferCost'
     ];
+
     zeroMoneyFields.forEach(id => money(id, 0));
+
     text('selectedSizeText', message || '-');
     text('sheetsNeeded', '0');
     text('costingModeText', '-');
@@ -322,12 +398,14 @@
   function applyResult(result) {
     const simple = result.simple_costing_summary || {};
     const materialItems = result.material_items || {};
+
     const paperCost = numericAmount(materialItems.selected_material?.total);
     const inkCost = numericAmount(materialItems.ink_usage?.total);
     const laminationCost = numericAmount(materialItems.selected_lamination?.total);
     const packagingCost = numericAmount(materialItems.selected_packaging?.total);
     const safetyBuffer = numericAmount(materialItems.safety_buffer?.total);
     const wasteBuffer = numericAmount(materialItems.waste_buffer?.total);
+
     const rawMaterials = paperCost + inkCost + laminationCost + packagingCost;
     const systemAdds = safetyBuffer + wasteBuffer;
 
@@ -342,15 +420,18 @@
     money('kpiLabor', labor);
     money('kpiOverhead', overhead);
     money('kpiSrp', srp);
+
     money('paperMaterialCost', paperCost);
     money('inkMaterialCost', inkCost);
     money('laminationMaterialCost', laminationCost);
     money('packagingMaterialCost', packagingCost);
     money('rawMaterialsResult', rawMaterials);
+
     money('safetyBufferCost', safetyBuffer);
     money('wasteBufferCost', wasteBuffer);
     money('systemAddsTotal', systemAdds);
     money('materialsResult', materials);
+
     money('laborResult', labor);
     money('overheadResult', overhead);
     money('baseCostResult', baseCost);
@@ -358,8 +439,8 @@
     money('srpResult', srp);
     money('roundedSrpResult', result.recommended_base_price || srp);
     money('pricePerPiece', result.price_per_piece || 0);
-    text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
 
+    text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
     text('selectedSizeText', result.sticker_size || getSelectedText('stickerSize') || '-');
     text('sheetsNeeded', result.sheets_needed || 0);
     text('costingModeText', result.costing_mode || (document.getElementById('cricutCut')?.checked ? 'Cricut cut' : 'Full sheet / print only'));
@@ -372,6 +453,7 @@
 
     window.simpleCostingSummary = {
       orderName: value('orderName'),
+      customerName: value('customerName'),
       size: result.sticker_size || getSelectedText('stickerSize') || '-',
       paper: getSelectedText('materialId') || '-',
       lamination: getSelectedText('laminationId') || 'None',
@@ -382,15 +464,26 @@
       costingMode: result.costing_mode || (document.getElementById('cricutCut')?.checked ? 'Cricut cut' : 'Full sheet / print only'),
       costingQtyPerSheet: result.costing_qty_per_sheet || 0,
       sheetsNeeded: result.sheets_needed || 0,
-      materials, labor, overhead, baseCost, profit, srp,
+      materials,
+      labor,
+      overhead,
+      baseCost,
+      profit,
+      srp,
       roundedSrp: numericAmount(result.recommended_base_price || srp || 0),
       pricePerPiece: numericAmount(result.price_per_piece || 0),
       profitMargin: numericAmount(result.profit_margin || 0),
-      paperCost, inkCost, laminationCost, packagingCost, rawMaterials, safetyBuffer, wasteBuffer, systemAdds
+      paperCost,
+      inkCost,
+      laminationCost,
+      packagingCost,
+      rawMaterials,
+      safetyBuffer,
+      wasteBuffer,
+      systemAdds
     };
   }
 
-  let calculateTimer = null;
   function scheduleCalculation() {
     clearTimeout(calculateTimer);
     calculateTimer = setTimeout(calculateSimpleCosting, 250);
@@ -434,6 +527,7 @@
       });
 
       const data = await response.json();
+
       if (!response.ok || !data.ok) {
         console.error('Simple costing error:', data);
         updateEmptyState('Please check required fields');
@@ -447,10 +541,168 @@
     }
   }
 
+  function getSimpleCurrentItemData() {
+    const summary = window.simpleCostingSummary || {};
+
+    return {
+      product_name: value('orderName') || 'Simple Costing Item',
+      sticker_size_id: value('stickerSize'),
+      sticker_size: summary.size || getSelectedText('stickerSize'),
+      quantity: Number(value('quantity') || 0),
+      material_id: value('materialId') || '',
+      material_name: getSelectedText('materialId') || '',
+      lamination_id: value('laminationId') || '',
+      lamination_name: getSelectedText('laminationId') || '',
+      packaging_id: value('packagingId') || '',
+      packaging_name: getSelectedText('packagingId') || '',
+      packaging_capacity: getPackagingCapacity(),
+      use_cricut_cut: document.getElementById('cricutCut')?.checked ? '1' : '0',
+      ink_cost_per_sheet: value('inkCostPerSheet') || 0,
+      labor_minutes: value('laborMinutes') || 0,
+      additional_direct_cost: value('additionalDirectCost') || 0,
+      target_sale_price: value('targetSalePrice') || 0,
+      design_fee: value('designFee') || 0,
+      sheets_needed: summary.sheetsNeeded || 0,
+      unit_price: summary.pricePerPiece || 0,
+      line_total: summary.srp || 0,
+      line_cost: summary.baseCost || 0,
+      line_profit: summary.profit || 0
+    };
+  }
+
+  function renderSimpleOrderItems() {
+    const tbody = document.getElementById('simpleOrderItemsBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (simpleOrderItems.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">No items added yet.</td></tr>';
+      text('simpleOrderTotalQty', '0');
+      text('simpleOrderSubtotal', peso.format(0));
+      text('simpleOrderTotalCost', peso.format(0));
+      text('simpleOrderTotalProfit', peso.format(0));
+      return;
+    }
+
+    let totalQty = 0;
+    let subtotal = 0;
+    let totalCost = 0;
+    let totalProfit = 0;
+
+    simpleOrderItems.forEach((item, index) => {
+      totalQty += Number(item.quantity || 0);
+      subtotal += Number(item.line_total || 0);
+      totalCost += Number(item.line_cost || 0);
+      totalProfit += Number(item.line_profit || 0);
+
+      tbody.innerHTML += `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${item.product_name}</td>
+          <td>${item.sticker_size}</td>
+          <td>${item.quantity}</td>
+          <td>${item.sheets_needed}</td>
+          <td>${peso.format(item.unit_price || 0)}</td>
+          <td>${peso.format(item.line_total || 0)}</td>
+          <td>${peso.format(item.line_cost || 0)}</td>
+          <td>${peso.format(item.line_profit || 0)}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeSimpleOrderItem(${index})">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    text('simpleOrderTotalQty', totalQty);
+    text('simpleOrderSubtotal', peso.format(subtotal));
+    text('simpleOrderTotalCost', peso.format(totalCost));
+    text('simpleOrderTotalProfit', peso.format(totalProfit));
+  }
+
+  window.addSimpleItemToOrder = function () {
+    const item = getSimpleCurrentItemData();
+
+    if (!item.product_name || item.quantity <= 0 || !item.sticker_size_id) {
+      alert('Please enter product name, quantity, and sticker size first.');
+      return;
+    }
+
+    simpleOrderItems.push(item);
+    renderSimpleOrderItems();
+  };
+
+  window.removeSimpleOrderItem = function (index) {
+    simpleOrderItems.splice(index, 1);
+    renderSimpleOrderItems();
+  };
+
+  window.logSimpleOrder = async function () {
+    if (simpleOrderItems.length === 0) {
+      alert('Please add at least one item before logging the order.');
+      return;
+    }
+
+    const firstItem = simpleOrderItems[0];
+
+    const payload = {
+      customer_name: value('customerName') || '',
+      order_name: value('orderName') || 'Simple Costing Order',
+      platform: value('platform') || 'Walk-in',
+      payment_method: value('paymentMethod') || 'Cash',
+      status: value('orderStatus') || 'Pending',
+
+      sticker_size_id: firstItem.sticker_size_id,
+      quantity: firstItem.quantity,
+      material_id: firstItem.material_id,
+      lamination_id: firstItem.lamination_id,
+      packaging_id: firstItem.packaging_id,
+      packaging_capacity: firstItem.packaging_capacity,
+      use_cricut_cut: firstItem.use_cricut_cut,
+      ink_cost_per_sheet: firstItem.ink_cost_per_sheet,
+      labor_minutes: firstItem.labor_minutes,
+      additional_direct_cost: firstItem.additional_direct_cost,
+      target_sale_price: firstItem.target_sale_price,
+      design_fee: firstItem.design_fee,
+      shipping_fee: 0
+    };
+
+    try {
+      const response = await fetch('{% url "log_sale" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        console.error(data);
+        alert(data.error || 'Could not log order.');
+        return;
+      }
+
+      alert(data.message || 'Order logged successfully.');
+      simpleOrderItems = [];
+      renderSimpleOrderItems();
+
+    } catch (error) {
+      console.error(error);
+      alert('Could not log order.');
+    }
+  };
+
   window.copySimpleQuote = function () {
     const summary = window.simpleCostingSummary || {};
+
     const textLines = [
       'Simple Costing Summary',
+      `Customer: ${summary.customerName || '-'}`,
       `Order: ${summary.orderName || '-'}`,
       `Size: ${summary.size || '-'}`,
       `Quantity: ${summary.quantity || 0}`,
@@ -481,6 +733,7 @@
       `Price / Piece: ${peso.format(summary.pricePerPiece || 0)}`,
       `Profit Margin: ${(summary.profitMargin || 0).toFixed(2)}%`
     ];
+
     const textToCopy = textLines.join('\n');
 
     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -490,7 +743,10 @@
     });
   };
 
-  document.getElementById('packagingId')?.addEventListener('change', syncPackagingCapacity);
+  document.getElementById('packagingId')?.addEventListener('change', function () {
+    syncPackagingCapacity();
+    scheduleCalculation();
+  });
 
   ids.forEach(id => {
     const element = document.getElementById(id);
@@ -502,6 +758,7 @@
 
   syncPackagingCapacity();
   updateEmptyState('Select size and quantity');
+  renderSimpleOrderItems();
   scheduleCalculation();
 })();
 </script>

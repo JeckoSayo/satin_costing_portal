@@ -179,6 +179,8 @@ class SimpleCostingCalculatorView(TemplateView):
             category=Material.CATEGORY_PACKAGING,
         )
         ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
+        ctx["payment_choices"] = SaleLog.PAYMENT_CHOICES
+        ctx["status_choices"] = SaleLog.STATUS_CHOICES
         return ctx
 
 
@@ -224,10 +226,13 @@ class LogSaleView(View):
             "material_id": form.cleaned_data.get("material_id"),
             "lamination_id": form.cleaned_data.get("lamination_id"),
             "packaging_id": form.cleaned_data.get("packaging_id"),
+            "packaging_capacity": payload.get("packaging_capacity"),
+            "use_cricut_cut": payload.get("use_cricut_cut"),
             "ink_cost_per_sheet": form.cleaned_data.get("ink_cost_per_sheet"),
             "labor_minutes": form.cleaned_data.get("labor_minutes"),
             "additional_direct_cost": form.cleaned_data.get("additional_direct_cost"),
             "target_sale_price": form.cleaned_data.get("target_sale_price"),
+            "design_fee": payload.get("design_fee"),
         }
 
         sale_payload = {

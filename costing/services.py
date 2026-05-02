@@ -351,19 +351,20 @@ def create_sale_from_order_items(payload):
 
     for item in items:
         quote_data = {
-        "sticker_size_id": item.get("sticker_size_id") or item.get("sticker_size"),
-        "quantity": item.get("quantity"),
-        "material_id": item.get("material_id"),
-        "lamination_id": item.get("lamination_id"),
-        "packaging_id": item.get("packaging_id"),
-        "packaging_capacity": item.get("packaging_capacity"),
-        "use_cricut_cut": item.get("use_cricut_cut"),
-        "ink_cost_per_sheet": item.get("ink_cost_per_sheet"),
-        "labor_minutes": item.get("labor_minutes"),
-        "additional_direct_cost": item.get("additional_direct_cost"),
-        "target_sale_price": item.get("target_sale_price"),
-        "platform": platform,
-    }
+            "sticker_size_id": item.get("sticker_size_id") or item.get("sticker_size"),
+            "quantity": item.get("quantity"),
+            "material_id": item.get("material_id"),
+            "lamination_id": item.get("lamination_id"),
+            "packaging_id": item.get("packaging_id"),
+            "packaging_capacity": item.get("packaging_capacity"),
+            "use_cricut_cut": item.get("use_cricut_cut"),
+            "ink_cost_per_sheet": item.get("ink_cost_per_sheet"),
+            "labor_minutes": item.get("labor_minutes"),
+            "additional_direct_cost": item.get("additional_direct_cost"),
+            "target_sale_price": item.get("target_sale_price"),
+            "design_fee": item.get("design_fee"),
+            "platform": platform,
+        }
         result = calculate_quote(quote_data)
 
         line_qty = int(D(item.get("quantity"), "0"))
