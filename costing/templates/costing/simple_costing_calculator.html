@@ -174,6 +174,16 @@
           <input type="number" id="designFee" class="form-control figma-control" value="0.00" step="0.01" min="0">
         </div>
         <div class="figma-field">
+        <label>Shipping Fee (Optional)</label>
+        <input type="number"
+              id="shippingFee"
+              class="form-control figma-control"
+              value="0.00"
+              step="0.01"
+              min="0">
+        <small class="text-muted">Optional delivery or courier fee.</small>
+      </div>
+        <div class="figma-field">
           <label>Target Sale Price</label>
           <input type="number" id="targetSalePrice" class="form-control figma-control" value="0.00" step="0.01" min="0">
         </div>
@@ -205,6 +215,7 @@
         <div><span>Base Cost</span><strong id="baseCostResult">₱0.00</strong></div>
         <div class="metric-yellow"><span>Profit</span><strong id="profitResult">₱0.00</strong></div>
         <div class="metric-blue"><span>SRP</span><strong id="srpResult">₱0.00</strong></div>
+        <div><span>Shipping Fee</span><strong id="shippingFeeText">₱0.00</strong></div>
         <div class="metric-pink"><span>Rounded / Recommended SRP</span><strong id="roundedSrpResult">₱0.00</strong></div>
         <div><span>Price / Piece</span><strong id="pricePerPiece">₱0.00</strong></div>
         <div><span>Profit Margin</span><strong id="profitMargin">0.00%</strong></div>
@@ -437,6 +448,7 @@
     money('baseCostResult', baseCost);
     money('profitResult', profit);
     money('srpResult', srp);
+    money('shippingFeeText', result.shipping_fee || 0);
     money('roundedSrpResult', result.recommended_base_price || srp);
     money('pricePerPiece', result.price_per_piece || 0);
 
@@ -511,9 +523,9 @@
       additional_direct_cost: value('additionalDirectCost') || 0,
       target_sale_price: value('targetSalePrice') || 0,
       design_fee: value('designFee') || 0,
-      shipping_fee: 0,
       rush_percent: 0,
-      platform: value('platform') || 'Walk-in'
+      platform: value('platform') || 'Walk-in',
+      shipping_fee: parseFloat(document.getElementById("shippingFee").value || 0)
     };
 
     try {
