@@ -13,7 +13,7 @@
 
 <div class="card section-card bg-white" style="max-width: 900px;">
   <div class="p-4">
-    <form method="post">
+    <form method="post" novalidate>
       {% csrf_token %}
 
       {% if form.non_field_errors %}
@@ -57,10 +57,42 @@
         </div>
 
         <div>
+          <label class="form-label" for="{{ form.stock_qty.id_for_label }}">Stock Qty</label>
+          {{ form.stock_qty }}
+          {% if form.stock_qty.errors %}
+            <div class="field-error">{{ form.stock_qty.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.reorder_level.id_for_label }}">Reorder Level</label>
+          {{ form.reorder_level }}
+          {% if form.reorder_level.errors %}
+            <div class="field-error">{{ form.reorder_level.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
           <label class="form-label" for="{{ form.unit.id_for_label }}">Unit</label>
           {{ form.unit }}
           {% if form.unit.errors %}
             <div class="field-error">{{ form.unit.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.sku.id_for_label }}">SKU</label>
+          {{ form.sku }}
+          {% if form.sku.errors %}
+            <div class="field-error">{{ form.sku.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.supplier.id_for_label }}">Supplier</label>
+          {{ form.supplier }}
+          {% if form.supplier.errors %}
+            <div class="field-error">{{ form.supplier.errors }}</div>
           {% endif %}
         </div>
 
@@ -133,11 +165,16 @@
 {% block scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const form = document.querySelector("form");
   const categoryField = document.getElementById("id_category");
   const capacityField = document.getElementById("id_packaging_capacity");
   const capacityGroup = document.getElementById("packagingCapacityGroup");
 
   function togglePackagingCapacity() {
+    if (!categoryField || !capacityField || !capacityGroup) {
+      return;
+    }
+
     const isPackaging = categoryField.value === "Packaging";
 
     if (!isPackaging) {
@@ -158,7 +195,18 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   togglePackagingCapacity();
-  categoryField.addEventListener("change", togglePackagingCapacity);
+
+  if (categoryField) {
+    categoryField.addEventListener("change", togglePackagingCapacity);
+  }
+
+  if (form) {
+    form.addEventListener("submit", function () {
+      if (capacityField) {
+        capacityField.disabled = false;
+      }
+    });
+  }
 });
 </script>
 {% endblock %}

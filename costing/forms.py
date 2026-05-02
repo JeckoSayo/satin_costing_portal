@@ -50,6 +50,21 @@ class MaterialForm(BootstrapModelForm):
             "packaging_capacity": "For packaging only. Example: if 1 OPP bag holds 2 stickers, enter 2.",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["supplier"].required = False
+        self.fields["sku"].required = False
+        self.fields["reorder_level"].required = False
+
+    def clean_packaging_capacity(self):
+        category = self.cleaned_data.get("category")
+        packaging_capacity = self.cleaned_data.get("packaging_capacity")
+
+        if category == Material.CATEGORY_PACKAGING:
+            return packaging_capacity or 1
+
+        return None
 
 class StickerSizeForm(BootstrapModelForm):
     class Meta:

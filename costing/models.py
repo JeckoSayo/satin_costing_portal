@@ -126,7 +126,9 @@ class Material(models.Model):
         max_digits=12,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Low stock warning level."
+        blank=True,
+        null=True,
+        help_text="Optional low stock warning level."
     )
     sku = models.CharField(max_length=80, blank=True)
     supplier = models.CharField(max_length=160, blank=True)
