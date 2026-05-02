@@ -1,0 +1,140 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="mb-4">
+  {% if object %}
+    <h1 class="page-title mb-1">Edit Paper Size</h1>
+  {% else %}
+    <h1 class="page-title mb-1">Add Paper Size</h1>
+  {% endif %}
+  <p class="page-subtitle">
+    Enter only the paper width and height. Cricut safe area is estimated automatically.
+  </p>
+</div>
+
+<div class="card section-card bg-white" style="max-width: 850px;">
+  <div class="p-4">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="row g-3">
+
+        <div class="col-md-6">
+          <label class="form-label" for="{{ form.name.id_for_label }}">Name</label>
+          {{ form.name }}
+          {{ form.name.errors }}
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label" for="{{ form.width_in.id_for_label }}">Paper Width in</label>
+          {{ form.width_in }}
+          {{ form.width_in.errors }}
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label" for="{{ form.height_in.id_for_label }}">Paper Height in</label>
+          {{ form.height_in }}
+          {{ form.height_in.errors }}
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-check mt-4">
+            {{ form.use_cricut_safe_area }}
+            <label class="form-check-label fw-bold" for="{{ form.use_cricut_safe_area.id_for_label }}">
+              Use Cricut Safe Area
+            </label>
+          </div>
+          <small class="text-muted">
+            If enabled, safe area is estimated as 87% width and 83% height.
+          </small>
+          {{ form.use_cricut_safe_area.errors }}
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-check mt-4">
+            {{ form.is_active }}
+            <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">
+              Active
+            </label>
+          </div>
+          {{ form.is_active.errors }}
+        </div>
+
+        <div class="col-12">
+          <div class="alert alert-info mb-0">
+            <strong>Estimated Cricut Safe Area Preview:</strong>
+            <span id="safePreview">-</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-success px-4">
+          <i class="bi bi-save me-1"></i>
+          Save Paper
+        </button>
+
+        <a href="{% url 'paper_sizes' %}" class="btn btn-secondary px-4">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll("input, select, textarea").forEach(function(field) {
+  if (field.type !== "checkbox") {
+    field.classList.add("form-control");
+  }
+});
+
+document.querySelectorAll("input[type='checkbox']").forEach(function(field) {
+  field.classList.add("form-check-input");
+});
+
+function updateSafePreview() {
+  const widthInput = document.getElementById("id_width_in");
+  const heightInput = document.getElementById("id_height_in");
+  const cricutInput = document.getElementById("id_use_cricut_safe_area");
+  const preview = document.getElementById("safePreview");
+
+  const width = Number(widthInput.value || 0);
+  const height = Number(heightInput.value || 0);
+  const useCricut = cricutInput.checked;
+
+  if (!width || !height) {
+    preview.innerText = "-";
+    return;
+  }
+
+  let safeWidth = width;
+  let safeHeight = height;
+
+  if (useCricut) {
+    safeWidth = width * 0.87;
+    safeHeight = height * 0.83;
+  }
+
+  preview.innerText =
+    safeWidth.toFixed(2) + " in × " + safeHeight.toFixed(2) + " in";
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  updateSafePreview();
+
+  ["id_width_in", "id_height_in", "id_use_cricut_safe_area"].forEach(function(id) {
+    const field = document.getElementById(id);
+    if (field) {
+      field.addEventListener("input", updateSafePreview);
+      field.addEventListener("change", updateSafePreview);
+    }
+  });
+});
+</script>
+{% endblock %}

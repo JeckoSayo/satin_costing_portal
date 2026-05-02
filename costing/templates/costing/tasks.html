@@ -1,0 +1,19 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="sales-page">
+  <div class="sales-page-head"><h1 class="page-title mb-1">Shop Tasks</h1><p class="page-subtitle mb-0">Track follow-ups, pending quotes, reminders, and shop tasks.</p></div>
+  <div class="sales-filter-card">
+    <h2>Add Task</h2>
+    <form method="post" class="order-details-grid">{% csrf_token %}
+      {% for field in form %}<div class="figma-field"><label>{{ field.label }}</label>{{ field }}{% if field.errors %}<small class="text-danger">{{ field.errors|join:", " }}</small>{% endif %}</div>{% endfor %}
+      <div class="figma-field"><label>&nbsp;</label><button class="btn figma-log-btn">Save Task</button></div>
+    </form>
+  </div>
+  <div class="sales-table-card">
+    <h2>Task List</h2>
+    <table class="table align-middle"><thead><tr><th>Due</th><th>Priority</th><th>Task</th><th>Status</th><th>Related Order</th></tr></thead>
+      <tbody>{% for t in tasks %}<tr><td>{{ t.due_date|default:"-" }}</td><td>{{ t.priority }}</td><td>{{ t.title }}</td><td>{{ t.status }}</td><td>{% if t.related_sale %}<a href="{% url 'sale_detail' t.related_sale.pk %}">{{ t.related_sale.receipt_number }}</a>{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No tasks.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

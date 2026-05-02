@@ -1,0 +1,101 @@
+<a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+  <i class="bi bi-grid"></i>
+  <span>Dashboard</span>
+</a>
+
+<a href="{% url 'quote_calculator' %}" class="nav-link {% if request.resolver_match.url_name == 'quote_calculator' %}active{% endif %}">
+  <i class="bi bi-calculator"></i>
+  <span>Quote Calculator</span>
+</a>
+
+<a href="{% url 'simple_costing_calculator' %}" class="nav-link {% if request.resolver_match.url_name == 'simple_costing_calculator' %}active{% endif %}">
+  <i class="bi bi-receipt"></i>
+  <span>Simple Costing</span>
+</a>
+
+<a href="{% url 'fast_pos' %}" class="nav-link {% if request.resolver_match.url_name == 'fast_pos' or request.resolver_match.url_name == 'pos_products' %}active{% endif %}">
+  <i class="bi bi-shop"></i>
+  <span>Fast POS</span>
+</a>
+
+<a href="{% url 'product_catalog' %}" class="nav-link {% if request.resolver_match.url_name == 'product_catalog' %}active{% endif %}">
+  <i class="bi bi-stars"></i>
+  <span>Product Catalog</span>
+</a>
+<a href="{% url 'product_quote' %}" class="nav-link {% if request.resolver_match.url_name == 'product_quote' %}active{% endif %}">
+  <i class="bi bi-calculator"></i>
+  <span>Product Quote</span>
+</a>
+
+<a href="{% url 'sales_log' %}" class="nav-link {% if request.resolver_match.url_name == 'sales_log' %}active{% endif %}">
+  <i class="bi bi-cart"></i>
+  <span>Sales Log</span>
+</a>
+
+<a href="{% url 'order_queue' %}" class="nav-link {% if request.resolver_match.url_name == 'order_queue' %}active{% endif %}">
+  <i class="bi bi-kanban"></i>
+  <span>Order Queue</span>
+</a>
+
+<a href="{% url 'analytics_dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'analytics_dashboard' %}active{% endif %}">
+  <i class="bi bi-bar-chart-line"></i>
+  <span>Analytics</span>
+</a>
+
+
+<a href="{% url 'smart_business' %}" class="nav-link {% if request.resolver_match.url_name == 'smart_business' %}active{% endif %}">
+  <i class="bi bi-lightning-charge"></i>
+  <span>Smart Business</span>
+</a>
+
+<a href="{% url 'smart_paste' %}" class="nav-link {% if request.resolver_match.url_name == 'smart_paste' or request.resolver_match.url_name == 'smart_paste_edit' %}active{% endif %}">
+  <i class="bi bi-magic"></i>
+  <span>Smart Paste</span>
+</a>
+
+<a href="{% url 'cashflow' %}" class="nav-link {% if request.resolver_match.url_name == 'cashflow' %}active{% endif %}">
+  <i class="bi bi-cash-stack"></i>
+  <span>Cashflow</span>
+</a>
+
+<a href="{% url 'expenses' %}" class="nav-link {% if request.resolver_match.url_name == 'expenses' %}active{% endif %}">
+  <i class="bi bi-receipt-cutoff"></i>
+  <span>Expenses</span>
+</a>
+
+<a href="{% url 'stock_purchases' %}" class="nav-link {% if request.resolver_match.url_name == 'stock_purchases' %}active{% endif %}">
+  <i class="bi bi-box-arrow-in-down"></i>
+  <span>Stock In</span>
+</a>
+
+<a href="{% url 'tasks' %}" class="nav-link {% if request.resolver_match.url_name == 'tasks' %}active{% endif %}">
+  <i class="bi bi-check2-square"></i>
+  <span>Tasks</span>
+</a>
+
+
+<a href="{% url 'materials' %}" class="nav-link {% if request.resolver_match.url_name == 'materials' %}active{% endif %}">
+  <i class="bi bi-box-seam"></i>
+  <span>Materials Master</span>
+</a>
+
+<a href="{% url 'sticker_sizes' %}" class="nav-link {% if request.resolver_match.url_name == 'sticker_sizes' %}active{% endif %}">
+  <i class="bi bi-file-earmark-text"></i>
+  <span>Sticker Size Guide</span>
+</a>
+
+<a href="{% url 'paper_sizes' %}" class="nav-link {% if request.resolver_match.url_name == 'paper_sizes' %}active{% endif %}">
+  <i class="bi bi-rulers"></i>
+  <span>Paper Sizes</span>
+</a>
+
+<a href="{% url 'price_settings' %}" class="nav-link {% if request.resolver_match.url_name == 'price_settings' %}active{% endif %}">
+  <i class="bi bi-gear"></i>
+  <span>Price Settings</span>
+</a>
+
+
+<button type="button" class="nav-link border-0 bg-transparent text-start v4-tour-nav-button" data-v4-tour-start>
+  <i class="bi bi-compass"></i>
+  <span>Guided Tour</span>
+</button>

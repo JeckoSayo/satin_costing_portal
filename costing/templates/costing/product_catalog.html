@@ -1,0 +1,72 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="materials-page">
+  <div class="materials-head">
+    <div>
+      <h1 class="page-title mb-1">Product Catalog</h1>
+      <p class="page-subtitle mb-0">Manage sticker bundles, photo prints, invitations, Cricut crafts, and event packages.</p>
+    </div>
+    <div class="materials-actions">
+      <a href="{% url 'product_quote' %}" class="btn materials-add-btn"><i class="bi bi-calculator me-1"></i>Quote Product</a>
+      <a href="{% url 'product_add' %}" class="btn materials-add-btn"><i class="bi bi-plus-lg me-1"></i>Add Product</a>
+      <a href="{% url 'product_tier_add' %}" class="btn materials-delete-btn"><i class="bi bi-layers me-1"></i>Add Tier</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for category in categories %}
+      <div class="col-md-4 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+          <div class="card-body">
+            <div class="fw-bold">{{ category.name }}</div>
+            <div class="text-muted small">{{ category.get_pricing_type_display }}</div>
+            <p class="small mb-0 mt-2">{{ category.description|default:"Product group"|truncatechars:80 }}</p>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12"><div class="alert alert-info">No product categories yet. Run seed_demo_data or add a category.</div></div>
+    {% endfor %}
+  </div>
+
+  <div class="materials-table-card">
+    <div class="table-responsive">
+      <table class="table materials-table align-middle mb-0 w-100">
+        <thead>
+          <tr>
+            <th>Category</th><th>Product</th><th>Bundle/Base Price</th><th>Min</th><th>Margin</th><th>Capacity</th><th>Tiers</th><th class="text-center">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for product in products %}
+          <tr>
+            <td>{{ product.category.name }}</td>
+            <td class="fw-bold">{{ product.name }}<div class="small text-muted">{{ product.description|truncatechars:70 }}</div></td>
+            <td>₱{{ product.base_selling_price }} / {{ product.base_quantity }}</td>
+            <td>{{ product.minimum_order_qty }} pcs<br><span class="small text-muted">₱{{ product.minimum_order_price }}</span></td>
+            <td>{{ product.target_margin_percent }}%</td>
+            <td>{{ product.max_daily_qty }} daily<br><span class="small text-muted">Manual over {{ product.manual_quote_above_qty }}</span></td>
+            <td>{% for tier in product.tiers.all %}<div class="small">{{ tier.label|default:tier }} </div>{% empty %}<span class="text-muted small">No tiers</span>{% endfor %}</td>
+            <td class="text-center"><a class="btn btn-sm btn-outline-primary" href="{% url 'product_edit' product.pk %}">Edit</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4">No products yet. Run seed_demo_data or add your first product preset.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-4 mt-4">
+    <div class="card-body">
+      <h4 class="fw-bold">Recent Saved Quotes</h4>
+      {% for quote in recent_quotes %}
+        <div class="d-flex justify-content-between border-bottom py-2">
+          <div>{{ quote.product.name }} × {{ quote.quantity }} <span class="text-muted small">{{ quote.customer_name }}</span></div>
+          <div class="fw-bold">₱{{ quote.selling_price }} <span class="text-success small">Profit ₱{{ quote.profit }}</span></div>
+        </div>
+      {% empty %}<p class="text-muted mb-0">No saved quotes yet.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

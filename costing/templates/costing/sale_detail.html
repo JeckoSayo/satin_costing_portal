@@ -1,0 +1,181 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="sales-page">
+
+  <div class="sales-page-head">
+    <h1 class="page-title mb-1">Order Details</h1>
+    <p class="page-subtitle mb-0">
+      {{ sale.receipt_number }} · {{ sale.customer_name }}
+    </p>
+  </div>
+
+  <div class="sales-stat-grid">
+    <div class="sales-stat-card">
+      <span>Total Items</span>
+      <strong>{{ sale.item_count }}</strong>
+    </div>
+
+    <div class="sales-stat-card">
+      <span>Total Qty</span>
+      <strong>{{ sale.total_quantity }}</strong>
+    </div>
+
+    <div class="sales-stat-card">
+      <span>Total</span>
+      <strong>₱{{ sale.total_collected|floatformat:2 }}</strong>
+    </div>
+
+    <div class="sales-stat-card">
+      <span>Profit</span>
+      <strong>₱{{ sale.profit|floatformat:2 }}</strong>
+    </div>
+  </div>
+
+  {% with simple=sale.cost_breakdown.simple_costing_summary inventory=sale.cost_breakdown.inventory_sync %}
+    {% if simple %}
+      <div class="figma-card mb-4">
+        <h2>Simple Costing Summary</h2>
+        <div class="figma-metric-list">
+          <div><span>Materials</span><strong>₱{{ simple.materials|floatformat:2 }}</strong></div>
+          <div><span>Labor</span><strong>₱{{ simple.labor|floatformat:2 }}</strong></div>
+          <div><span>Overhead</span><strong>₱{{ simple.overhead|floatformat:2 }}</strong></div>
+          <div class="metric-yellow"><span>Profit</span><strong>₱{{ simple.profit|floatformat:2 }}</strong></div>
+          <div class="metric-blue"><span>SRP</span><strong>₱{{ simple.srp|floatformat:2 }}</strong></div>
+        </div>
+        <p class="text-muted mb-0 mt-2">
+          Inventory sync: {% if inventory.stock_deducted %}Materials, lamination, and packaging were deducted from stock.{% else %}No stock deduction was applied for this status.{% endif %}
+        </p>
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="figma-action-row mb-4">
+    <a href="{% url 'sale_edit' sale.pk %}" class="btn figma-log-btn"><i class="bi bi-pencil me-1"></i>Edit Operations</a>
+    <a href="{% url 'job_ticket' sale.pk %}" class="btn figma-clear-btn"><i class="bi bi-printer me-1"></i>Job Ticket</a>
+    <form method="post" action="{% url 'sale_reorder' sale.pk %}" class="d-inline">{% csrf_token %}
+      <button class="btn figma-log-btn"><i class="bi bi-arrow-repeat me-1"></i>Reorder Same Specs</button>
+    </form>
+    {% if sale.customer_name %}
+      <a href="{% url 'customer_history' sale.customer_name %}" class="btn figma-clear-btn"><i class="bi bi-person-lines-fill me-1"></i>Customer History</a>
+    {% endif %}
+  </div>
+  <div class="figma-card mb-4">
+    <h2>Order Information</h2>
+
+    <div class="order-details-grid">
+      <div class="figma-field">
+        <label>Order ID</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.receipt_number }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Date</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.created_at|date:'M d, Y H:i' }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Customer</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.customer_name }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Platform</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.platform }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Payment</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.payment_method }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Status</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.status }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Tracking Number</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.tracking_number|default:'-' }}" readonly>
+      </div>
+
+      <div class="figma-field">
+        <label>Courier</label>
+        <input class="form-control figma-control readonly-field" value="{{ sale.courier|default:'-' }}" readonly>
+      </div>
+
+      <div class="figma-field full">
+        <label>Shipping Address</label>
+        <textarea class="form-control figma-control readonly-field" readonly>{{ sale.shipping_address|default:"-" }}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="sales-table-card">
+    <h2>Order Items</h2>
+
+    <div class="table-responsive">
+      <table class="table sales-table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Line ID</th>
+            <th>SKU</th>
+            <th>Product</th>
+            <th>Size</th>
+            <th>Material</th>
+            <th>Lamination</th>
+            <th>Packaging</th>
+            <th class="text-end">Qty</th>
+            <th class="text-end">Sheets</th>
+            <th class="text-end">Unit</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Cost</th>
+            <th class="text-end">Profit</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for item in sale.items.all %}
+            <tr>
+              <td>{{ item.line_id }}</td>
+              <td>{{ item.sku|default:"-" }}</td>
+              <td>{{ item.product_name }}</td>
+              <td>{{ item.sticker_size }}</td>
+              <td>{{ item.material_name }}</td>
+              <td>{{ item.lamination_name }}</td>
+              <td>{{ item.packaging_name }}</td>
+              <td class="text-end">{{ item.quantity }}</td>
+              <td class="text-end">{{ item.sheets_needed }}</td>
+              <td class="text-end">₱{{ item.unit_price|floatformat:2 }}</td>
+              <td class="text-end fw-bold">₱{{ item.line_total|floatformat:2 }}</td>
+              <td class="text-end">₱{{ item.line_cost|floatformat:2 }}</td>
+              <td class="text-end sales-profit">₱{{ item.line_profit|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="13" class="text-center text-muted py-5 fw-bold">
+                No order items found.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="figma-action-row mt-4">
+    <a href="{% url 'sales_log' %}" class="btn figma-clear-btn">
+      <i class="bi bi-arrow-left me-1"></i>
+      Back to Sales Log
+    </a>
+
+    <a href="{% url 'sale_edit' sale.id %}" class="btn figma-log-btn">
+      <i class="bi bi-pencil-square me-1"></i>
+      Edit Order
+    </a>
+  </div>
+
+</div>
+
+{% endblock %}

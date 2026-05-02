@@ -1,0 +1,194 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+<div class="figma-dashboard dashboard-v42">
+  <div class="figma-page-head v42-head">
+    <div>
+      <span class="v42-pill"><i class="bi bi-speedometer2 me-1"></i>Daily Cockpit</span>
+      <h1 class="page-title mb-1">Today’s Shop Dashboard</h1>
+      <p class="page-subtitle mb-0">A cleaner daily view focused on sales, profit, queue, stock, and quick actions.</p>
+    </div>
+    <div class="v42-head-actions">
+      <a href="{% url 'quote_calculator' %}" class="btn figma-log-btn"><i class="bi bi-calculator me-1"></i>New Quote</a>
+      <a href="{% url 'fast_pos' %}" class="btn btn-outline-primary rounded-pill"><i class="bi bi-shop me-1"></i>Fast POS</a>
+    </div>
+  </div>
+
+  <div class="v42-kpi-grid">
+    <a href="{% url 'sales_log' %}" class="v42-kpi-card kpi-blue">
+      <span>Sales Today</span>
+      <strong>₱{{ today_revenue|floatformat:2 }}</strong>
+      <small>{{ today_orders }} order{{ today_orders|pluralize }}</small>
+    </a>
+    <a href="{% url 'analytics_dashboard' %}" class="v42-kpi-card kpi-pink">
+      <span>Profit Today</span>
+      <strong>₱{{ today_profit|floatformat:2 }}</strong>
+      <small>after logged costs</small>
+    </a>
+    <a href="{% url 'order_queue' %}?due=today" class="v42-kpi-card kpi-yellow">
+      <span>Due Today</span>
+      <strong>{{ due_today_count }}</strong>
+      <small>unfinished jobs</small>
+    </a>
+    <a href="{% url 'order_queue' %}?due=ready" class="v42-kpi-card kpi-green">
+      <span>Ready Jobs</span>
+      <strong>{{ ready_count }}</strong>
+      <small>ready for release</small>
+    </a>
+    <a href="{% url 'cashflow' %}" class="v42-kpi-card kpi-purple">
+      <span>Unpaid Balance</span>
+      <strong>₱{{ unpaid_balance|floatformat:2 }}</strong>
+      <small>collectables</small>
+    </a>
+    <a href="{% url 'materials' %}" class="v42-kpi-card kpi-orange">
+      <span>Low Stock</span>
+      <strong>{{ low_stock_count }}</strong>
+      <small>needs review</small>
+    </a>
+  </div>
+
+  <div class="v42-action-grid mt-4">
+    <a href="{% url 'quote_calculator' %}" class="v42-action-card">
+      <i class="bi bi-calculator"></i>
+      <strong>Quote Calculator</strong>
+      <span>Full costing, custom sizes, Cricut safe area, materials, and order logging.</span>
+    </a>
+    <a href="{% url 'fast_pos' %}" class="v42-action-card">
+      <i class="bi bi-shop"></i>
+      <strong>Fast Counter POS</strong>
+      <span>Tap common bundles like 4 for ₱100 and monitor live margin.</span>
+    </a>
+    <a href="{% url 'order_queue' %}" class="v42-action-card">
+      <i class="bi bi-kanban"></i>
+      <strong>Order Queue</strong>
+      <span>Move work from printing to cutting, packing, ready, and released.</span>
+    </a>
+    <a href="{% url 'expenses' %}" class="v42-action-card">
+      <i class="bi bi-receipt-cutoff"></i>
+      <strong>Add Expense</strong>
+      <span>Track ink, paper, delivery, utilities, packaging, and maintenance.</span>
+    </a>
+  </div>
+
+  <div class="v42-work-grid mt-4">
+    <div class="figma-card v42-focus-card">
+      <div class="v42-section-head">
+        <div>
+          <h2>Today’s Attention List</h2>
+          <p class="text-muted mb-0">Only the items that can block work or cash today.</p>
+        </div>
+        <a href="{% url 'tasks' %}" class="btn btn-sm btn-outline-primary rounded-pill">Open tasks</a>
+      </div>
+      <div class="v42-attention-list">
+        <a href="{% url 'order_queue' %}?due=today">
+          <i class="bi bi-calendar-event"></i>
+          <span>Orders due today</span>
+          <strong>{{ due_today_count }}</strong>
+        </a>
+        <a href="{% url 'order_queue' %}?due=ready">
+          <i class="bi bi-bag-check"></i>
+          <span>Ready for pickup/release</span>
+          <strong>{{ ready_count }}</strong>
+        </a>
+        <a href="{% url 'cashflow' %}">
+          <i class="bi bi-wallet2"></i>
+          <span>Unpaid customer balance</span>
+          <strong>₱{{ unpaid_balance|floatformat:2 }}</strong>
+        </a>
+        <a href="{% url 'materials' %}">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span>Low-stock materials</span>
+          <strong>{{ low_stock_count }}</strong>
+        </a>
+      </div>
+    </div>
+
+    <div class="figma-card">
+      <div class="v42-section-head">
+        <div>
+          <h2>Low Stock Preview</h2>
+          <p class="text-muted mb-0">Go to Materials for full inventory control.</p>
+        </div>
+        <a href="{% url 'stock_purchases' %}" class="btn btn-sm btn-outline-primary rounded-pill">Stock in</a>
+      </div>
+      {% if low_stock_materials %}
+        <div class="figma-metric-list compact-list">
+          {% for material in low_stock_materials %}
+            <div><span>{{ material.item_name|truncatechars:30 }}</span><strong>{{ material.stock_qty|floatformat:2 }} {{ material.unit }}</strong></div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="v42-empty"><i class="bi bi-check-circle"></i>No low-stock materials right now.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="v42-work-grid mt-4">
+    <div class="figma-card">
+      <div class="v42-section-head">
+        <div>
+          <h2>Recent Sales</h2>
+          <p class="text-muted mb-0">Latest logged orders.</p>
+        </div>
+        <a href="{% url 'sales_log' %}" class="btn btn-sm btn-outline-primary rounded-pill">View all</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle v42-mini-table">
+          <thead><tr><th>Customer</th><th>Order</th><th class="text-end">Total</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for sale in recent_sales %}
+              <tr>
+                <td>{{ sale.customer_name|default:"Walk-in"|truncatechars:20 }}</td>
+                <td>{{ sale.order_name|truncatechars:28 }}</td>
+                <td class="text-end">₱{{ sale.selling_price|floatformat:2 }}</td>
+                <td><span class="badge rounded-pill text-bg-light">{{ sale.status }}</span></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-muted text-center py-4">No sales logged yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="figma-card">
+      <div class="v42-section-head">
+        <div>
+          <h2>Repeat Customers</h2>
+          <p class="text-muted mb-0">Customers worth re-engaging.</p>
+        </div>
+        <a href="{% url 'sales_log' %}" class="btn btn-sm btn-outline-primary rounded-pill">Sales</a>
+      </div>
+      {% if top_repeat_customers %}
+        <div class="figma-metric-list compact-list">
+          {% for customer in top_repeat_customers %}
+            <div>
+              <span>{{ customer.customer_name|truncatechars:24 }}</span>
+              <strong>{{ customer.order_count }} order{{ customer.order_count|pluralize }}</strong>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="v42-empty"><i class="bi bi-person-heart"></i>Repeat customers appear after sales are logged.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="figma-card mt-4 v42-insights-card">
+    <div class="v42-section-head">
+      <div>
+        <h2>Deep Tools Moved Out of Dashboard</h2>
+        <p class="text-muted mb-0">The main dashboard stays clean. Open deeper tools when needed.</p>
+      </div>
+    </div>
+    <div class="v42-tool-strip">
+      <a href="{% url 'analytics_dashboard' %}"><i class="bi bi-bar-chart-line"></i>Analytics</a>
+      <a href="{% url 'smart_business' %}"><i class="bi bi-lightning-charge"></i>Smart Business</a>
+      <a href="{% url 'materials' %}"><i class="bi bi-box-seam"></i>Inventory</a>
+      <a href="{% url 'cashflow' %}"><i class="bi bi-cash-stack"></i>Cashflow</a>
+      <a href="{% url 'product_catalog' %}"><i class="bi bi-stars"></i>Catalog</a>
+      <a href="{% url 'price_settings' %}"><i class="bi bi-gear"></i>Settings</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

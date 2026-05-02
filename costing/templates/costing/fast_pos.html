@@ -1,0 +1,96 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="figma-dashboard">
+  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+    <div>
+      <h1 class="page-title mb-1">Fast POS</h1>
+      <p class="page-subtitle mb-0">Tap bundle products, sell quickly, and monitor profit as material prices change.</p>
+    </div>
+    <a href="{% url 'pos_products' %}" class="btn figma-log-btn"><i class="bi bi-sliders me-1"></i>Edit POS Products</a>
+  </div>
+
+  {% if low_margin_products %}
+    <div class="alert alert-warning rounded-4 shadow-sm">
+      <strong>Low margin review needed:</strong>
+      {% for p in low_margin_products %}
+        {{ p.name }}{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="figma-kpi-grid">
+    <div class="figma-kpi-card kpi-blue"><div class="figma-kpi-icon"><i class="bi bi-lightning-charge"></i></div><span>Active POS Products</span><strong>{{ pos_products|length }}</strong></div>
+    <div class="figma-kpi-card kpi-pink"><div class="figma-kpi-icon"><i class="bi bi-exclamation-triangle"></i></div><span>Low Margin Items</span><strong>{{ low_margin_products|length }}</strong></div>
+    <div class="figma-kpi-card kpi-yellow"><div class="figma-kpi-icon"><i class="bi bi-tags"></i></div><span>Best Use</span><strong>Walk-in</strong></div>
+    <div class="figma-kpi-card kpi-green"><div class="figma-kpi-icon"><i class="bi bi-cash-coin"></i></div><span>Mode</span><strong>Fast Counter</strong></div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="figma-card">
+        <h2>Quick Sell Buttons</h2>
+        <div class="row g-3">
+          {% for product in pos_products %}
+            <div class="col-md-6 col-xl-4">
+              <div class="pos-product-card border rounded-4 p-3 h-100 {% if product.is_low_margin %}border-warning bg-warning-subtle{% endif %}">
+                <div class="d-flex justify-content-between gap-2 mb-2">
+                  <div>
+                    <h5 class="fw-bold mb-1">{{ product.button_label|default:product.name }}</h5>
+                    <small class="text-muted">{{ product.bundle_quantity }} pcs / bundle</small>
+                  </div>
+                  <strong class="fs-5">₱{{ product.selling_price|floatformat:2 }}</strong>
+                </div>
+                <div class="small mb-2">
+                  <div>Cost: <strong>₱{{ product.estimated_cost|floatformat:2 }}</strong></div>
+                  <div>Profit: <strong>₱{{ product.estimated_profit|floatformat:2 }}</strong></div>
+                  <div>Margin: <strong>{{ product.estimated_margin|floatformat:1 }}%</strong> / Target {{ product.target_margin_percent|floatformat:0 }}%</div>
+                  {% if product.is_low_margin %}
+                    <div class="text-danger fw-bold mt-1">Suggested: ₱{{ product.recommended_price|floatformat:2 }}</div>
+                  {% endif %}
+                </div>
+                <form method="post" class="mt-3">
+                  {% csrf_token %}
+                  <input type="hidden" name="product_id" value="{{ product.id }}">
+                  <div class="row g-2">
+                    <div class="col-6"><input type="number" name="bundle_count" value="1" min="1" class="form-control" aria-label="Bundle count"></div>
+                    <div class="col-6">
+                      <select name="payment_method" class="form-select">
+                        <option>Cash</option><option>GCash</option><option>Bank Transfer</option>
+                      </select>
+                    </div>
+                    <div class="col-12"><input type="text" name="customer_name" class="form-control" placeholder="Customer name optional"></div>
+                    <div class="col-12"><button class="btn figma-log-btn w-100" type="submit"><i class="bi bi-cart-check me-1"></i>Sell Now</button></div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          {% empty %}
+            <div class="col-12 text-center text-muted py-5">No POS products yet. Create your first POS product.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="figma-card mb-4">
+        <h2>How V3.7 protects profit</h2>
+        <p class="text-muted mb-2">Each button is linked to live Materials Master costs. If supplies increase, cost/margin updates automatically.</p>
+        <ul class="small text-muted mb-0">
+          <li>Edit material pack price monthly for inflation.</li>
+          <li>Use low-margin warning to adjust promos.</li>
+          <li>Save snapshots from POS Products for price history.</li>
+        </ul>
+      </div>
+      <div class="figma-card">
+        <h2>Recent POS Sales</h2>
+        {% for sale in recent_pos_sales %}
+          <div class="d-flex justify-content-between border-bottom py-2 small">
+            <span>{{ sale.order_name }}</span><strong>₱{{ sale.selling_price|floatformat:2 }}</strong>
+          </div>
+        {% empty %}
+          <p class="text-muted mb-0">No POS sales yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,212 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+
+<div class="mb-4">
+  <h1 class="page-title mb-1">
+    {% if object %}Edit{% else %}Add{% endif %} Material
+  </h1>
+  <p class="page-subtitle">
+    Materials are separated by category: Sticker Paper, Lamination/Photo Top, Packaging, Ink, or Other.
+  </p>
+</div>
+
+<div class="card section-card bg-white" style="max-width: 900px;">
+  <div class="p-4">
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="field-error material-span-2">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div class="material-form-grid">
+
+        <div>
+          <label class="form-label" for="{{ form.category.id_for_label }}">Category</label>
+          {{ form.category }}
+          {% if form.category.errors %}
+            <div class="field-error">{{ form.category.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.item_name.id_for_label }}">Item name</label>
+          {{ form.item_name }}
+          {% if form.item_name.errors %}
+            <div class="field-error">{{ form.item_name.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.pack_price.id_for_label }}">Pack price</label>
+          {{ form.pack_price }}
+          {% if form.pack_price.errors %}
+            <div class="field-error">{{ form.pack_price.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.pack_qty.id_for_label }}">Pack qty</label>
+          {{ form.pack_qty }}
+          {% if form.pack_qty.errors %}
+            <div class="field-error">{{ form.pack_qty.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.stock_qty.id_for_label }}">Stock Qty</label>
+          {{ form.stock_qty }}
+          {% if form.stock_qty.errors %}
+            <div class="field-error">{{ form.stock_qty.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.reorder_level.id_for_label }}">Reorder Level</label>
+          {{ form.reorder_level }}
+          {% if form.reorder_level.errors %}
+            <div class="field-error">{{ form.reorder_level.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.unit.id_for_label }}">Unit</label>
+          {{ form.unit }}
+          {% if form.unit.errors %}
+            <div class="field-error">{{ form.unit.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.sku.id_for_label }}">SKU</label>
+          {{ form.sku }}
+          {% if form.sku.errors %}
+            <div class="field-error">{{ form.sku.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label class="form-label" for="{{ form.supplier.id_for_label }}">Supplier</label>
+          {{ form.supplier }}
+          {% if form.supplier.errors %}
+            <div class="field-error">{{ form.supplier.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="use-type-box">
+          <label class="form-label" for="{{ form.use_type.id_for_label }}">Use type</label>
+          {{ form.use_type }}
+          {% if form.use_type.errors %}
+            <div class="field-error">{{ form.use_type.errors }}</div>
+          {% endif %}
+
+          <div class="alert alert-light border mt-2 small mb-0">
+            <div><strong>Direct Material</strong> → Used up every order, like sticker paper, lamination, ink, or packaging.</div>
+            <div><strong>Equipment</strong> → Long-term machines/assets, like printer, Cricut, or laminator.</div>
+            <div><strong>Tool</strong> → Reusable tools/accessories, like cutter, scissors, ruler, or scraper.</div>
+          </div>
+        </div>
+
+        <div id="packagingCapacityGroup">
+          <label class="form-label" for="{{ form.packaging_capacity.id_for_label }}">
+            Packaging Capacity
+          </label>
+          {{ form.packaging_capacity }}
+          {% if form.packaging_capacity.errors %}
+            <div class="field-error">{{ form.packaging_capacity.errors }}</div>
+          {% endif %}
+          <small class="text-muted d-block mt-1">
+            Used for Packaging only. Example: if 1 OPP bag holds 2 stickers, enter 2.
+          </small>
+        </div>
+
+        <div class="active-material-box">
+          <div class="form-check mb-0">
+            {{ form.is_active }}
+            <label class="form-check-label fw-bold" for="{{ form.is_active.id_for_label }}">
+              Active Material
+            </label>
+            {% if form.is_active.errors %}
+              <div class="field-error">{{ form.is_active.errors }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="material-span-2">
+          <label class="form-label" for="{{ form.notes.id_for_label }}">Notes</label>
+          {{ form.notes }}
+          {% if form.notes.errors %}
+            <div class="field-error">{{ form.notes.errors }}</div>
+          {% endif %}
+        </div>
+
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-success px-4">
+          <i class="bi bi-save me-1"></i>
+          Save Material
+        </button>
+
+        <a href="{% url 'materials' %}" class="btn btn-secondary px-4">
+          Cancel
+        </a>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.querySelector("form");
+  const categoryField = document.getElementById("id_category");
+  const capacityField = document.getElementById("id_packaging_capacity");
+  const capacityGroup = document.getElementById("packagingCapacityGroup");
+
+  function togglePackagingCapacity() {
+    if (!categoryField || !capacityField || !capacityGroup) {
+      return;
+    }
+
+    const isPackaging = categoryField.value === "Packaging";
+
+    if (!isPackaging) {
+      capacityField.value = "";
+      capacityField.disabled = true;
+      capacityField.required = false;
+      capacityGroup.classList.add("opacity-50");
+    } else {
+      capacityField.disabled = false;
+      capacityField.required = true;
+
+      if (!capacityField.value) {
+        capacityField.value = 1;
+      }
+
+      capacityGroup.classList.remove("opacity-50");
+    }
+  }
+
+  togglePackagingCapacity();
+
+  if (categoryField) {
+    categoryField.addEventListener("change", togglePackagingCapacity);
+  }
+
+  if (form) {
+    form.addEventListener("submit", function () {
+      if (capacityField) {
+        capacityField.disabled = false;
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

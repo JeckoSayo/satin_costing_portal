@@ -1,0 +1,122 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+<div class="figma-dashboard">
+  <div class="figma-page-head">
+    <div>
+      <h1 class="page-title mb-1">Smart Paste</h1>
+      <p class="page-subtitle mb-0">Paste Messenger, Facebook, Instagram, SMS, or walk-in notes and convert them into quote-ready fields.</p>
+    </div>
+  </div>
+
+  <div class="figma-main-grid">
+    <div class="figma-card">
+      <h2>Paste Customer Message</h2>
+      <form method="post">
+        {% csrf_token %}
+        {{ form.raw_message }}
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button type="submit" class="btn figma-log-btn"><i class="bi bi-magic me-1"></i> Smart Parse Message</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="loadSmartPasteExample()"><i class="bi bi-lightbulb me-1"></i> Try Example</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="figma-card">
+      <h2>How It Helps</h2>
+      <div class="figma-metric-list">
+        <div><span>Detects Quantity</span><strong>pcs / labels / cards</strong></div>
+        <div><span>Detects Size</span><strong>2x2, 4R, cm/in</strong></div>
+        <div><span>Detects Product</span><strong>stickers / photos / invites</strong></div>
+        <div><span>Detects Finish</span><strong>matte / glossy / holo</strong></div>
+        <div><span>Builds Reply</span><strong>chat-ready</strong></div>
+      </div>
+    </div>
+  </div>
+
+  {% if parsed %}
+  <div class="figma-card mt-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+      <div>
+        <h2 class="mb-1">Parsed Quote Draft</h2>
+        <p class="text-muted mb-0">Confidence: <strong>{{ parsed.confidence_score }}%</strong>. Review before quoting or logging an order.</p>
+      </div>
+      <a href="{% url 'smart_paste_edit' inquiry.pk %}" class="btn btn-outline-primary rounded-pill"><i class="bi bi-pencil-square me-1"></i>Edit Parsed Fields</a>
+    </div>
+
+    {% if parsed.warnings %}
+      <div class="alert alert-warning rounded-4">
+        <strong>Needs confirmation:</strong>
+        <ul class="mb-0 mt-2">
+          {% for warning in parsed.warnings %}<li>{{ warning }}</li>{% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="figma-main-grid">
+      <div class="figma-card bg-light border-0">
+        <h2>Extracted Details</h2>
+        <div class="figma-metric-list">
+          <div><span>Customer</span><strong>{{ parsed.customer_name|default:"Not detected" }}</strong></div>
+          <div><span>Product</span><strong>{{ parsed.product_name }}</strong></div>
+          <div><span>Product Type</span><strong>{{ parsed.product_type }}</strong></div>
+          <div><span>Quantity</span><strong>{{ parsed.quantity }}</strong></div>
+          <div><span>Size</span><strong>{% if parsed.width_in and parsed.height_in %}{{ parsed.width_in }} x {{ parsed.height_in }} in{% else %}Not detected{% endif %}</strong></div>
+          <div><span>Material Keyword</span><strong>{{ parsed.material_keyword|default:"Not detected" }}</strong></div>
+          <div><span>Finish</span><strong>{{ parsed.finish_keyword|default:"Not detected" }}</strong></div>
+          <div><span>Deadline</span><strong>{{ parsed.deadline_text|default:"Not detected" }}</strong></div>
+          <div><span>Delivery</span><strong>{{ parsed.delivery_method|default:"Not detected" }}</strong></div>
+          <div><span>Payment</span><strong>{{ parsed.payment_method|default:"Not detected" }}</strong></div>
+        </div>
+      </div>
+
+      <div class="figma-card bg-light border-0">
+        <h2>Chat Reply</h2>
+        <textarea id="smartPasteReply" class="form-control figma-control" rows="8">{{ parsed.suggested_reply }}</textarea>
+        <button type="button" class="btn figma-log-btn mt-3" onclick="copySmartPasteReply()"><i class="bi bi-clipboard me-1"></i>Copy Reply</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="figma-card mt-4">
+    <h2>Recent Smart Paste Inquiries</h2>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Qty</th><th>Size</th><th>Confidence</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          {% for inquiry in recent_inquiries %}
+          <tr>
+            <td>{{ inquiry.created_at|date:"M d, H:i" }}</td>
+            <td>{{ inquiry.customer_name|default:"-" }}</td>
+            <td>{{ inquiry.product_name|default:"-" }}</td>
+            <td>{{ inquiry.quantity }}</td>
+            <td>{% if inquiry.width_in and inquiry.height_in %}{{ inquiry.width_in }} x {{ inquiry.height_in }} in{% else %}-{% endif %}</td>
+            <td>{{ inquiry.confidence_score }}%</td>
+            <td><span class="badge bg-primary-subtle text-primary">{{ inquiry.status }}</span></td>
+            <td><a href="{% url 'smart_paste_edit' inquiry.pk %}" class="btn btn-sm btn-outline-primary">Review</a></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-4 fw-bold">No Smart Paste inquiries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function loadSmartPasteExample() {
+  const field = document.querySelector('[name="raw_message"]');
+  if (!field) return;
+  field.value = 'Hi po, pa quote 100 pcs waterproof stickers 2x2 matte, pickup tomorrow, GCash. Name: Ana';
+}
+function copySmartPasteReply() {
+  const field = document.getElementById('smartPasteReply');
+  field?.select();
+  document.execCommand('copy');
+}
+</script>
+{% endblock %}
