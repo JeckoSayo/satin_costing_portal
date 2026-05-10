@@ -58,10 +58,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+# DATABASES = {
+#     "default": dj_database_url.config(
+#         default="sqlite:///db.sqlite3",
+#         conn_max_age=600
+#     )
+# }
+
 DATABASES = {
     "default": dj_database_url.config(
-        default="sqlite:///db.sqlite3",
-        conn_max_age=600
+        default=os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3"),
+        conn_max_age=600,
     )
 }
 
