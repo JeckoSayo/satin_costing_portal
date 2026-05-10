@@ -493,9 +493,18 @@ class SaleLogItem(models.Model):
         related_name="sale_packaging_items"
     )
 
+    other_material = models.ForeignKey(
+        Material,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sale_other_material_items"
+    )
+
     material_name = models.CharField(max_length=180, blank=True)
     lamination_name = models.CharField(max_length=180, blank=True)
     packaging_name = models.CharField(max_length=180, blank=True)
+    other_material_name = models.CharField(max_length=180, blank=True)
 
     quantity = models.PositiveIntegerField(default=0)
     sheets_needed = models.PositiveIntegerField(default=0)
@@ -513,6 +522,12 @@ class SaleLogItem(models.Model):
     )
 
     packaging_qty_used = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00")
+    )
+
+    other_material_qty_used = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         default=Decimal("0.00")

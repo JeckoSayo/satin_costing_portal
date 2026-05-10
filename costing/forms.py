@@ -126,6 +126,7 @@ class QuoteForm(forms.Form):
     material_id = forms.IntegerField(required=False, min_value=1)
     lamination_id = forms.IntegerField(required=False, min_value=1)
     packaging_id = forms.IntegerField(required=False, min_value=1)
+    other_material_id = forms.IntegerField(required=False, min_value=1)
 
     ink_cost_per_sheet = forms.DecimalField(
         max_digits=10,

@@ -1,6 +1,6 @@
 {% extends "costing/base.html" %}
 {% block content %}
-<div class="sales-page">
+<div class="sales-page order-queue-page">
   <div class="sales-page-head">
     <h1 class="page-title mb-1">Order Queue</h1>
     <p class="page-subtitle mb-0">Daily job board for print, cut, packing, pickup, and release.</p>
@@ -14,7 +14,7 @@
   </div>
 
   <div class="sales-filter-card">
-    <form method="get" class="sales-filter-grid">
+    <form method="get" class="sales-filter-grid order-queue-filter-grid">
       <input type="text" name="search" class="form-control sales-input" placeholder="Customer, receipt, order..." value="{{ search }}">
       <select name="job_status" class="form-select sales-input">
         <option value="">All job statuses</option>
@@ -38,7 +38,7 @@
   <div class="sales-table-card">
     <h2>Jobs</h2>
     <div class="table-responsive">
-      <table class="table align-middle">
+      <table class="table align-middle order-queue-table">
         <thead><tr><th>Receipt</th><th>Customer</th><th>Order</th><th>Due</th><th>Status</th><th>Balance</th><th>Actions</th></tr></thead>
         <tbody>
         {% for sale in orders %}
@@ -48,20 +48,28 @@
             <td>{{ sale.order_name|truncatechars:45 }}</td>
             <td>{{ sale.due_date|default:"-" }}</td>
             <td>
-              <form method="post" action="{% url 'update_job_status' sale.pk %}" class="d-flex gap-2">
+              <form method="post" action="{% url 'update_job_status' sale.pk %}" class="queue-status-form">
                 {% csrf_token %}
                 <select name="job_status" class="form-select form-select-sm">
                   {% for value,label in job_choices %}
                     <option value="{{ value }}" {% if sale.job_status == value %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
-                <button class="btn btn-sm btn-primary">Save</button>
+                <button class="btn btn-sm btn-primary action-icon-btn" type="submit" title="Save status" aria-label="Save status">
+                  <i class="bi bi-check-lg"></i>
+                </button>
               </form>
             </td>
             <td>₱{{ sale.balance_amount|floatformat:2 }}</td>
             <td>
-              <a class="btn btn-sm btn-outline-primary" href="{% url 'sale_edit' sale.pk %}">Edit</a>
-              <a class="btn btn-sm btn-outline-secondary" href="{% url 'job_ticket' sale.pk %}">Ticket</a>
+              <div class="queue-action-buttons">
+                <a class="btn btn-sm btn-outline-primary action-icon-btn" href="{% url 'sale_edit' sale.pk %}" title="Edit order" aria-label="Edit order">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <a class="btn btn-sm btn-outline-secondary action-icon-btn" href="{% url 'job_ticket' sale.pk %}" title="Open job ticket" aria-label="Open job ticket">
+                  <i class="bi bi-receipt"></i>
+                </a>
+              </div>
             </td>
           </tr>
         {% empty %}

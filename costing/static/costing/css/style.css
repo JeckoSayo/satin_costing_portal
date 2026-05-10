@@ -2455,3 +2455,670 @@ table.dataTable td:last-child{
   color: #6b7280;
   font-weight: 800;
 }
+
+/* POS products */
+.pos-products-actions{
+  flex-shrink:0;
+}
+
+.pos-products-actions .btn{
+  min-width:130px;
+}
+
+.pos-products-table{
+  min-width:760px;
+}
+
+/* Order queue */
+.order-queue-filter-grid{
+  grid-template-columns:minmax(220px,2fr) minmax(180px,1fr) minmax(180px,1fr) auto;
+}
+
+.order-queue-table{
+  min-width:980px;
+}
+
+.queue-status-form{
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) 38px;
+  gap:8px;
+  align-items:center;
+}
+
+.queue-status-form .form-select{
+  min-width:0;
+}
+
+.queue-action-buttons{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.queue-action-buttons .action-icon-btn,
+.queue-status-form .action-icon-btn{
+  width:38px;
+  height:38px;
+  min-width:38px;
+  border-radius:10px;
+}
+
+/* Smart Paste */
+.smart-paste-result-grid{
+  grid-template-columns:minmax(0,2fr) minmax(360px,1fr);
+  align-items:stretch;
+}
+
+.smart-paste-reply-card{
+  display:flex;
+  flex-direction:column;
+  min-height:100%;
+}
+
+.smart-paste-reply-box{
+  flex:1;
+  min-height:280px;
+  height:auto !important;
+  line-height:1.5;
+  resize:vertical;
+  white-space:pre-wrap;
+  overflow:auto;
+}
+
+.smart-paste-copy-btn{
+  align-self:flex-start;
+  width:auto;
+  margin-top:16px;
+}
+
+.smart-paste-row-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.smart-paste-row-actions form{
+  margin:0;
+}
+
+.smart-paste-row-actions .action-icon-btn{
+  width:36px;
+  height:36px;
+  min-width:36px;
+  border-radius:10px;
+}
+
+/* Toast notifications */
+.toast-ui-stack{
+  position:fixed;
+  top:24px;
+  right:24px;
+  z-index:1200;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  width:min(390px, calc(100vw - 32px));
+  pointer-events:none;
+}
+
+.toast-ui-card{
+  position:relative;
+  display:grid;
+  grid-template-columns:8px 42px 1fr 30px;
+  gap:14px;
+  align-items:flex-start;
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  box-shadow:0 18px 40px rgba(15,23,42,.16);
+  overflow:hidden;
+  pointer-events:auto;
+  animation:toastUiIn .2s ease-out;
+}
+
+.toast-ui-accent{
+  width:8px;
+  height:100%;
+  min-height:96px;
+}
+
+.toast-ui-icon{
+  width:34px;
+  height:34px;
+  margin-top:18px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#ffffff;
+  font-size:20px;
+}
+
+.toast-ui-content{
+  padding:16px 0 14px;
+  min-width:0;
+}
+
+.toast-ui-content strong{
+  display:block;
+  color:#0f172a;
+  font-size:15px;
+  font-weight:900;
+  margin-bottom:3px;
+}
+
+.toast-ui-content span{
+  display:block;
+  color:#64748b;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.35;
+}
+
+.toast-ui-actions{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+}
+
+.toast-ui-actions .btn{
+  border-radius:9px;
+  padding:7px 12px;
+  font-size:13px;
+  font-weight:900;
+}
+
+.toast-ui-cancel{
+  background:#f1f5f9;
+  border:1px solid #e2e8f0;
+  color:#334155;
+}
+
+.toast-ui-cancel:hover{
+  background:#e2e8f0;
+  color:#0f172a;
+}
+
+.toast-ui-danger{
+  background:#ef4444;
+  border:1px solid #ef4444;
+  color:#ffffff;
+}
+
+.toast-ui-danger:hover{
+  background:#dc2626;
+  border-color:#dc2626;
+  color:#ffffff;
+}
+
+.toast-ui-close{
+  margin:14px 10px 0 0;
+  width:26px;
+  height:26px;
+  border:0;
+  background:transparent;
+  color:#64748b;
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.toast-ui-close:hover{
+  background:#f1f5f9;
+  color:#0f172a;
+}
+
+.toast-ui-warning .toast-ui-accent,
+.toast-ui-warning .toast-ui-icon{
+  background:#fbbf24;
+}
+
+@keyframes toastUiIn{
+  from{
+    opacity:0;
+    transform:translateY(-8px) translateX(12px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0) translateX(0);
+  }
+}
+
+/* Responsive hardening across all templates */
+html,
+body{
+  max-width:100%;
+  overflow-x:hidden;
+}
+
+img,
+svg,
+canvas,
+video{
+  max-width:100%;
+}
+
+.app-shell,
+.main-content,
+.figma-dashboard,
+.sales-page,
+.materials-page,
+.sizes-page,
+.papers-page,
+.analytics-shell,
+.smart-dashboard,
+.settings-page,
+.receipt-wrapper{
+  min-width:0;
+  max-width:100%;
+}
+
+.main-content{
+  width:100%;
+}
+
+.figma-card,
+.sales-table-card,
+.sales-filter-card,
+.sales-stat-card,
+.materials-table-card,
+.sizes-table-card,
+.papers-table-card,
+.settings-card,
+.sale-edit-card,
+.analytics-card,
+.analytics-kpi,
+.smart-card,
+.smart-kpi,
+.receipt-card,
+.section-card,
+.card{
+  min-width:0;
+  max-width:100%;
+}
+
+.figma-main-grid,
+.figma-bottom-grid,
+.figma-kpi-grid,
+.order-details-grid,
+.sales-stat-grid,
+.sales-filter-grid,
+.material-form-grid,
+.settings-grid,
+.sale-edit-grid,
+.analytics-hero,
+.analytics-kpi-grid,
+.analytics-grid-main,
+.analytics-grid-two,
+.smart-hero,
+.smart-kpi-grid,
+.smart-grid-main,
+.smart-grid-two,
+.chat-template-grid,
+.v42-kpi-grid,
+.v42-action-grid,
+.v42-work-grid,
+.v42-attention-list{
+  min-width:0;
+}
+
+.figma-card > .table,
+.sales-table-card > .table,
+.section-card > .table,
+.card > .table,
+.figma-table-wrap,
+.table-responsive,
+.dataTables_wrapper,
+.analytics-table,
+.smart-table-list{
+  max-width:100%;
+}
+
+.figma-card,
+.sales-table-card,
+.section-card,
+.card{
+  overflow-wrap:anywhere;
+}
+
+.figma-card > table,
+.sales-table-card > table,
+.section-card > table,
+.card > table{
+  display:block;
+  width:100%;
+  overflow-x:auto;
+  white-space:nowrap;
+}
+
+.table-responsive,
+.figma-table-wrap,
+.dataTables_wrapper{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.table{
+  width:100%;
+}
+
+.form-control,
+.form-select,
+.btn,
+textarea,
+input,
+select{
+  max-width:100%;
+}
+
+.figma-page-head,
+.materials-head,
+.sizes-head,
+.papers-head,
+.sales-page-head,
+.analytics-card-head,
+.smart-card-head,
+.v42-section-head{
+  min-width:0;
+}
+
+.figma-page-head,
+.v42-head,
+.analytics-card-head,
+.smart-card-head{
+  flex-wrap:wrap;
+}
+
+.figma-metric-list > div,
+.figma-labor-list > div,
+.smart-table-list > div,
+.analytics-table div,
+.queue-mini-list div,
+.stock-alert-list div{
+  min-width:0;
+}
+
+.figma-metric-list span,
+.figma-labor-list span,
+.smart-table-list span,
+.smart-table-list small,
+.analytics-table span,
+.queue-mini-list span,
+.stock-alert-list span{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+.figma-metric-list strong,
+.figma-labor-list strong,
+.smart-table-list b,
+.analytics-table strong,
+.queue-mini-list strong,
+.stock-alert-list strong{
+  flex-shrink:0;
+}
+
+@media(max-width:991.98px){
+  .main-content{
+    overflow-x:hidden;
+  }
+
+  .table{
+    min-width:720px;
+  }
+
+  .dataTables_wrapper .row{
+    gap:10px;
+  }
+
+  .dataTables_length label,
+  .dataTables_filter label{
+    align-items:stretch;
+    width:100%;
+  }
+
+  .dataTables_filter input{
+    width:100% !important;
+    margin-left:0 !important;
+  }
+
+  .dataTables_paginate .pagination{
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:4px;
+  }
+
+  .figma-page-head.d-flex,
+  .materials-head,
+  .sizes-head,
+  .papers-head{
+    align-items:stretch !important;
+  }
+}
+
+@media(max-width:768px){
+  .figma-card,
+  .sales-table-card,
+  .sales-filter-card,
+  .materials-table-card,
+  .sizes-table-card,
+  .papers-table-card,
+  .settings-card,
+  .sale-edit-card,
+  .analytics-card,
+  .smart-card,
+  .receipt-card,
+  .section-card{
+    padding:18px;
+    border-radius:16px;
+  }
+
+  .figma-kpi-card,
+  .sales-stat-card,
+  .analytics-kpi,
+  .smart-kpi,
+  .v42-kpi-card,
+  .v42-action-card{
+    padding:18px;
+    border-radius:16px;
+  }
+
+  .figma-kpi-card{
+    min-height:auto;
+  }
+
+  .figma-kpi-card strong,
+  .sales-stat-card strong,
+  .analytics-kpi strong,
+  .smart-kpi strong{
+    font-size:24px;
+  }
+
+  .figma-card h2,
+  .sales-filter-card h2,
+  .sales-table-card h2,
+  .analytics-card-head h2,
+  .smart-card h2{
+    font-size:20px;
+  }
+
+  .figma-metric-list > div,
+  .figma-labor-list > div,
+  .smart-table-list > div,
+  .analytics-table div,
+  .queue-mini-list div,
+  .stock-alert-list div{
+    align-items:flex-start;
+  }
+
+  .figma-metric-list strong,
+  .figma-labor-list strong{
+    max-width:45%;
+  }
+
+  .receipt-meta-grid{
+    grid-template-columns:1fr;
+  }
+
+  .receipt-total-box{
+    max-width:none;
+    margin-left:0;
+  }
+}
+
+@media(max-width:576px){
+  .main-content{
+    padding:16px 10px;
+  }
+
+  .page-title,
+  .analytics-hero h1,
+  .smart-hero h1{
+    font-size:28px;
+    line-height:1.12;
+  }
+
+  .page-subtitle,
+  .analytics-hero p,
+  .smart-hero p{
+    font-size:14px;
+  }
+
+  .table{
+    min-width:640px;
+  }
+
+  .figma-clear-btn,
+  .figma-log-btn,
+  .figma-defaults-btn,
+  .sales-search-btn,
+  .sales-reset-btn,
+  .settings-save-btn,
+  .settings-cancel-btn{
+    width:100%;
+    min-height:44px;
+    white-space:normal;
+  }
+
+  .figma-page-head .btn,
+  .materials-actions .btn,
+  .sizes-head .btn,
+  .papers-head .btn,
+  .sales-filter-actions .btn,
+  .settings-actions .btn,
+  .sale-edit-card .figma-action-row .btn{
+    width:100%;
+    white-space:normal;
+  }
+
+  .figma-action-row,
+  .sales-filter-actions,
+  .settings-actions,
+  .v4-tour-actions{
+    grid-template-columns:1fr;
+    flex-direction:column;
+  }
+
+  .v4-tour-actions .btn{
+    width:100%;
+  }
+
+  .v4-tour-fab{
+    width:50px;
+    height:50px;
+    right:14px;
+    bottom:14px;
+  }
+}
+
+@media(max-width:576px){
+  .pos-products-head{
+    flex-direction:column;
+    align-items:stretch !important;
+  }
+
+  .pos-products-actions{
+    width:100%;
+    flex-direction:column;
+  }
+
+  .pos-products-actions .btn{
+    width:100%;
+    min-width:0;
+  }
+
+  .pos-products-table{
+    min-width:700px;
+  }
+}
+
+@media(max-width:1200px){
+  .order-queue-filter-grid{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .order-queue-filter-grid .sales-filter-actions{
+    grid-column:1 / -1;
+  }
+}
+
+@media(max-width:576px){
+  .order-queue-filter-grid{
+    grid-template-columns:1fr;
+  }
+
+  .order-queue-filter-grid .sales-filter-actions{
+    grid-column:auto;
+  }
+
+  .order-queue-table{
+    min-width:900px;
+  }
+
+  .queue-action-buttons .action-icon-btn,
+  .queue-status-form .action-icon-btn{
+    width:38px;
+    min-width:38px;
+  }
+}
+
+@media(max-width:1300px){
+  .smart-paste-result-grid{
+    grid-template-columns:1fr;
+  }
+
+  .smart-paste-reply-box{
+    min-height:220px;
+  }
+}
+
+@media(max-width:576px){
+  .smart-paste-copy-btn{
+    width:100%;
+  }
+
+  .smart-paste-reply-box{
+    min-height:240px;
+  }
+
+  .toast-ui-stack{
+    top:14px;
+    right:12px;
+    left:12px;
+    width:auto;
+  }
+
+  .toast-ui-card{
+    grid-template-columns:6px 36px 1fr 28px;
+    gap:10px;
+  }
+
+  .toast-ui-actions{
+    flex-direction:column;
+  }
+
+  .toast-ui-actions .btn{
+    width:100%;
+  }
+}

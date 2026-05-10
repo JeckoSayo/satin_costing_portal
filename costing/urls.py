@@ -5,7 +5,7 @@ from .views import (
     StickerSizeListView, StickerSizeCreateView, StickerSizeUpdateView, StickerSizeDeleteView,
     PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
     PriceSettingsView, SalesLogView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
-    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView
+    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
 )
 
 urlpatterns = [
@@ -28,6 +28,7 @@ urlpatterns = [
     path('smart-business/', SmartBusinessView.as_view(), name='smart_business'),
     path('smart-paste/', SmartPasteView.as_view(), name='smart_paste'),
     path('smart-paste/<int:pk>/edit/', SmartPasteInquiryUpdateView.as_view(), name='smart_paste_edit'),
+    path('smart-paste/<int:pk>/delete/', SmartPasteInquiryDeleteView.as_view(), name='smart_paste_delete'),
     path('pos/', FastPOSView.as_view(), name='fast_pos'),
     path('pos/products/', QuickPOSProductListView.as_view(), name='pos_products'),
     path('pos/products/add/', QuickPOSProductCreateView.as_view(), name='pos_product_add'),

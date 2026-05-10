@@ -81,6 +81,11 @@ class DashboardView(TemplateView):
             is_active=True,
             category=Material.CATEGORY_PACKAGING
         )
+        ctx["other_materials"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_OTHER,
+            use_type=Material.USE_DIRECT,
+        )
 
         ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
         ctx["payment_choices"] = SaleLog.PAYMENT_CHOICES
@@ -178,6 +183,11 @@ class SimpleCostingCalculatorView(TemplateView):
             is_active=True,
             category=Material.CATEGORY_PACKAGING,
         )
+        ctx["other_materials"] = Material.objects.filter(
+            is_active=True,
+            category=Material.CATEGORY_OTHER,
+            use_type=Material.USE_DIRECT,
+        )
         ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
         ctx["payment_choices"] = SaleLog.PAYMENT_CHOICES
         ctx["status_choices"] = SaleLog.STATUS_CHOICES
@@ -226,6 +236,7 @@ class LogSaleView(View):
             "material_id": form.cleaned_data.get("material_id"),
             "lamination_id": form.cleaned_data.get("lamination_id"),
             "packaging_id": form.cleaned_data.get("packaging_id"),
+            "other_material_id": form.cleaned_data.get("other_material_id"),
             "packaging_capacity": payload.get("packaging_capacity"),
             "use_cricut_cut": payload.get("use_cricut_cut"),
             "ink_cost_per_sheet": form.cleaned_data.get("ink_cost_per_sheet"),
@@ -1259,3 +1270,11 @@ class SmartPasteInquiryUpdateView(UpdateView):
     def form_valid(self, form):
         messages.success(self.request, "Smart Paste inquiry updated.")
         return super().form_valid(form)
+
+
+class SmartPasteInquiryDeleteView(View):
+    def post(self, request, pk):
+        inquiry = get_object_or_404(SmartPasteInquiry, pk=pk)
+        inquiry.delete()
+        messages.success(request, "Smart Paste inquiry deleted.")
+        return redirect("smart_paste")

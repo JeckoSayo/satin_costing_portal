@@ -15,7 +15,7 @@
     <div class="col-md-6"><strong>Balance:</strong> ₱{{ sale.balance_amount|floatformat:2 }}</div>
   </div>
   <h2 class="mt-4">Items</h2>
-  <table class="table align-middle"><thead><tr><th>Product</th><th>Size</th><th>Material</th><th class="text-end">Qty</th><th class="text-end">Sheets</th></tr></thead><tbody>{% for item in sale.items.all %}<tr><td>{{ item.product_name }}</td><td>{{ item.sticker_size }}</td><td>{{ item.material_name }}</td><td class="text-end">{{ item.quantity }}</td><td class="text-end">{{ item.sheets_needed }}</td></tr>{% empty %}<tr><td colspan="5">No line items.</td></tr>{% endfor %}</tbody></table>
+  <table class="table align-middle"><thead><tr><th>Product</th><th>Size</th><th>Material</th><th>Other</th><th class="text-end">Qty</th><th class="text-end">Sheets</th></tr></thead><tbody>{% for item in sale.items.all %}<tr><td>{{ item.product_name }}</td><td>{{ item.sticker_size }}</td><td>{{ item.material_name }}</td><td>{{ item.other_material_name|default:"-" }}</td><td class="text-end">{{ item.quantity }}</td><td class="text-end">{{ item.sheets_needed }}</td></tr>{% empty %}<tr><td colspan="6">No line items.</td></tr>{% endfor %}</tbody></table>
   <h2>Production Notes</h2><div class="border rounded-4 p-3 bg-light">{{ sale.internal_job_notes|linebreaksbr|default:"No notes." }}</div>
 </div>
 {% endblock %}

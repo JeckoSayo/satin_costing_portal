@@ -395,6 +395,19 @@
               </div>
 
               <div class="figma-field">
+                <label>Other Direct Material</label>
+                <select id="otherMaterialCost" class="form-select figma-control user-input">
+                  <option value="0">None</option>
+                  {% for material in other_materials %}
+                    <option value="{{ material.unit_cost }}" data-id="{{ material.id }}" data-stock="{{ material.stock_qty }}">
+                      {{ material.item_name }} â€” Stock: {{ material.stock_qty }} {{ material.unit }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">Use for magnetic sheet, acrylic backing, board, or other sheet-based add-ons.</small>
+              </div>
+
+              <div class="figma-field">
                 <label>Manual Extra Work Minutes <span>(Optional)</span></label>
                 <input type="number" id="laborMinutes" class="form-control figma-control user-input" value="0" min="0" title="Only use this for special cleanup, file fixing, or unusually complex orders.">
               </div>
@@ -633,6 +646,13 @@
               </tr>
 
               <tr>
+                <td>Other Direct Material</td>
+                <td class="text-end" id="otherMaterialQty">0</td>
+                <td>sheet</td>
+                <td class="text-end" id="otherMaterialTotal">â‚±0.00</td>
+              </tr>
+
+              <tr>
                 <td>Ink Usage</td>
                 <td class="text-end" id="inkQty">0</td>
                 <td>sheet</td>
@@ -809,6 +829,84 @@ function setText(id, value) {
 function setValue(id, value) {
   const element = document.getElementById(id);
   if (element) element.value = value;
+}
+
+function resetQuoteOutputs() {
+  [
+    "kpiTotalCost",
+    "kpiRecommendedPrice",
+    "totalProductCost",
+    "simpleMaterialsCost",
+    "simpleLaborCost",
+    "simpleOverheadCost",
+    "simpleProfitCost",
+    "simpleSrpCost",
+    "markupPrice",
+    "marginPrice",
+    "recommendedBasePrice",
+    "productSalePrice",
+    "salesTax",
+    "shippingFeeText",
+    "priceTax",
+    "profit",
+    "pricePiece",
+    "finalPrice",
+    "profitPiece",
+    "salesPriceTaxOverview",
+    "materialUnitPrice",
+    "materialTotal",
+    "laminationUnitPrice",
+    "laminationTotal",
+    "packagingUnitPrice",
+    "packagingTotal",
+    "otherMaterialTotal",
+    "inkUnitPrice",
+    "inkTotal",
+    "safetyBufferTotal",
+    "totalMaterialCost",
+    "laborTotal",
+    "additionalDirectCostTotal",
+    "totalAdditionalCost"
+  ].forEach(function (id) {
+    setText(id, money(0));
+  });
+
+  [
+    "kpiMargin",
+    "profitMargin"
+  ].forEach(function (id) {
+    setText(id, "0.0%");
+  });
+
+  [
+    "currentQty",
+    "costingQtyText",
+    "sheetsNeeded",
+    "materialQty",
+    "laminationQty",
+    "packagingQty",
+    "otherMaterialQty",
+    "inkQty"
+  ].forEach(function (id) {
+    setText(id, "0");
+  });
+
+  setText("targetSalePriceResult", "-");
+  setText("discountTotal", "-");
+  setText("pricingReason", "-");
+  setText("bufferPercentText", "0%");
+  setText("laborMinutesText", "Auto: " + money(0));
+  setText("laborRateText", money(0) + "/sheet");
+  setText("leadTimeEstimate", "Ready today");
+
+  setValue("costingQtySheet", 0);
+  setValue("printSheetsInput", 0);
+  setValue("hiddenShippingFee", "0.00");
+  setValue("hiddenFinalPrice", "0.00");
+  setValue("hiddenSalesTax", "0.00");
+  setValue("hiddenTotalCost", "0.00");
+  setValue("hiddenProfit", "0.00");
+  setValue("hiddenDiscount", "0.00");
 }
 
 function getSelectedText(id) {
@@ -1023,11 +1121,18 @@ function applyPlatformDefaults() {
 function calculateQuote() {
   syncCustomSizePanel();
   const qty = numberValue("quantity");
+
+  if (qty <= 0) {
+    resetQuoteOutputs();
+    return;
+  }
+
   const costingQtySheet = getStickersPerSheet();
 
   const materialUnitCost = numberValue("materialCost");
   const laminationUnitCost = numberValue("laminationCost");
   const packagingUnitCost = numberValue("packagingCost");
+  const otherMaterialUnitCost = numberValue("otherMaterialCost");
   const shippingFee = numberValue("shippingFee");
 
   const inkCostPerSheet = numberValue("inkCost");
@@ -1067,12 +1172,14 @@ function calculateQuote() {
       : 0;
 
   const packagingTotal = packagingQty * packagingUnitCost;
+  const otherMaterialTotal = sheetsNeeded * otherMaterialUnitCost;
   const inkTotal = sheetsNeeded * inkCostPerSheet;
 
   const baseMaterialCost =
     materialTotal +
     laminationTotal +
     packagingTotal +
+    otherMaterialTotal +
     inkTotal +
     safetyBufferAmount;
 
@@ -1161,6 +1268,9 @@ function calculateQuote() {
   setText("packagingUnitPrice", money(packagingUnitCost));
   setText("packagingTotal", money(packagingTotal));
 
+  setText("otherMaterialQty", otherMaterialUnitCost > 0 ? sheetsNeeded : 0);
+  setText("otherMaterialTotal", money(otherMaterialTotal));
+
   setText("inkQty", sheetsNeeded);
   setText("inkUnitPrice", money(inkCostPerSheet));
   setText("inkTotal", money(inkTotal));
@@ -1200,6 +1310,10 @@ function getCurrentItemData() {
   const packagingQtyUsed = cleanMoney(
     document.getElementById("packagingQty").innerText
   );
+  const otherMaterialQtyUsed =
+    numberValue("otherMaterialCost") > 0
+      ? numberValue("printSheetsInput")
+      : 0;
 
   return {
     sku: "",
@@ -1211,10 +1325,12 @@ function getCurrentItemData() {
     material_id: getSelectedDataId("materialCost"),
     lamination_id: getSelectedDataId("laminationCost"),
     packaging_id: getSelectedDataId("packagingCost"),
+    other_material_id: getSelectedDataId("otherMaterialCost"),
 
     material_name: getSelectedText("materialCost"),
     lamination_name: getSelectedText("laminationCost"),
     packaging_name: getSelectedText("packagingCost"),
+    other_material_name: getSelectedText("otherMaterialCost"),
 
     quantity: qty,
     sheets_needed: numberValue("printSheetsInput"),
@@ -1223,6 +1339,7 @@ function getCurrentItemData() {
     material_qty_used: materialQtyUsed,
     lamination_qty_used: laminationQtyUsed,
     packaging_qty_used: packagingQtyUsed,
+    other_material_qty_used: otherMaterialQtyUsed,
 
     ink_cost_per_sheet: numberValue("inkCost"),
     labor_minutes: numberValue("laborMinutes"),

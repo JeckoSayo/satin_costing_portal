@@ -109,7 +109,7 @@
 
     <div class="figma-card">
       <h2>Materials from Materials Master</h2>
-      <p class="text-muted mb-3">Paper, phototop/lamination, OPP bag, and ink are pulled into the same quote engine.</p>
+      <p class="text-muted mb-3">Paper, phototop/lamination, OPP bag, other direct materials, and ink are pulled into the same quote engine.</p>
       <div class="order-details-grid">
         <div class="figma-field">
           <label>Paper / Main Material</label>
@@ -152,6 +152,18 @@
         <div class="figma-field">
           <label>Ink Cost / Sheet</label>
           <input type="number" id="inkCostPerSheet" class="form-control figma-control" value="{{ settings.default_ink_cost_per_sheet|floatformat:2 }}" step="0.01" min="0">
+        </div>
+        <div class="figma-field">
+          <label>Other Direct Material</label>
+          <select id="otherMaterialId" class="form-select figma-control">
+            <option value="">None</option>
+            {% for material in other_materials %}
+              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}">
+                {{ material.item_name }} â€” â‚±{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">Use for magnetic sheet or other add-on material used per print sheet.</small>
         </div>
       </div>
     </div>
@@ -202,6 +214,7 @@
         <div><span>Ink</span><strong id="inkMaterialCost">₱0.00</strong></div>
         <div><span>Photo Top / Lamination</span><strong id="laminationMaterialCost">₱0.00</strong></div>
         <div><span>OPP / Packaging</span><strong id="packagingMaterialCost">₱0.00</strong></div>
+        <div><span>Other Direct Material</span><strong id="otherMaterialCost">₱0.00</strong></div>
         <div class="metric-blue"><span>Your Calculation</span><strong id="rawMaterialsResult">₱0.00</strong></div>
 
         <div class="metric-section-title mt-2"><span>System Adds</span><strong id="systemAddsTotal">₱0.00</strong></div>
@@ -326,7 +339,7 @@
   const ids = [
     'orderName', 'customerName', 'quantity', 'stickerSize', 'platform',
     'paymentMethod', 'orderStatus', 'cricutCut',
-    'materialId', 'laminationId', 'packagingId', 'packagingCapacity',
+    'materialId', 'laminationId', 'packagingId', 'otherMaterialId', 'packagingCapacity',
     'inkCostPerSheet', 'laborMinutes', 'additionalDirectCost',
     'designFee', 'targetSalePrice'
   ];
@@ -390,7 +403,7 @@
       'materialsResult', 'laborResult', 'overheadResult', 'baseCostResult',
       'profitResult', 'srpResult', 'roundedSrpResult', 'pricePerPiece',
       'paperMaterialCost', 'inkMaterialCost', 'laminationMaterialCost',
-      'packagingMaterialCost', 'rawMaterialsResult', 'systemAddsTotal',
+      'packagingMaterialCost', 'otherMaterialCost', 'rawMaterialsResult', 'systemAddsTotal',
       'safetyBufferCost', 'wasteBufferCost'
     ];
 
@@ -414,10 +427,11 @@
     const inkCost = numericAmount(materialItems.ink_usage?.total);
     const laminationCost = numericAmount(materialItems.selected_lamination?.total);
     const packagingCost = numericAmount(materialItems.selected_packaging?.total);
+    const otherMaterialCost = numericAmount(materialItems.selected_other_material?.total);
     const safetyBuffer = numericAmount(materialItems.safety_buffer?.total);
     const wasteBuffer = numericAmount(materialItems.waste_buffer?.total);
 
-    const rawMaterials = paperCost + inkCost + laminationCost + packagingCost;
+    const rawMaterials = paperCost + inkCost + laminationCost + packagingCost + otherMaterialCost;
     const systemAdds = safetyBuffer + wasteBuffer;
 
     const materials = numericAmount(result.total_material_cost || simple.materials || 0);
@@ -436,6 +450,7 @@
     money('inkMaterialCost', inkCost);
     money('laminationMaterialCost', laminationCost);
     money('packagingMaterialCost', packagingCost);
+    money('otherMaterialCost', otherMaterialCost);
     money('rawMaterialsResult', rawMaterials);
 
     money('safetyBufferCost', safetyBuffer);
@@ -470,6 +485,7 @@
       paper: getSelectedText('materialId') || '-',
       lamination: getSelectedText('laminationId') || 'None',
       packaging: getSelectedText('packagingId') || 'None',
+      otherMaterial: getSelectedText('otherMaterialId') || 'None',
       packagingCapacity: result.packaging_capacity || getPackagingCapacity(),
       quantity: result.quantity || value('quantity') || 0,
       cricutCut: result.use_cricut_cut ?? document.getElementById('cricutCut')?.checked ?? false,
@@ -489,6 +505,7 @@
       inkCost,
       laminationCost,
       packagingCost,
+      otherMaterialCost,
       rawMaterials,
       safetyBuffer,
       wasteBuffer,
@@ -516,6 +533,7 @@
       material_id: value('materialId') || '',
       lamination_id: value('laminationId') || '',
       packaging_id: value('packagingId') || '',
+      other_material_id: value('otherMaterialId') || '',
       packaging_capacity: getPackagingCapacity(),
       use_cricut_cut: document.getElementById('cricutCut')?.checked ? '1' : '0',
       ink_cost_per_sheet: value('inkCostPerSheet') || 0,
@@ -567,6 +585,8 @@
       lamination_name: getSelectedText('laminationId') || '',
       packaging_id: value('packagingId') || '',
       packaging_name: getSelectedText('packagingId') || '',
+      other_material_id: value('otherMaterialId') || '',
+      other_material_name: getSelectedText('otherMaterialId') || '',
       packaging_capacity: getPackagingCapacity(),
       use_cricut_cut: document.getElementById('cricutCut')?.checked ? '1' : '0',
       ink_cost_per_sheet: value('inkCostPerSheet') || 0,
@@ -671,6 +691,7 @@
       material_id: firstItem.material_id,
       lamination_id: firstItem.lamination_id,
       packaging_id: firstItem.packaging_id,
+      other_material_id: firstItem.other_material_id,
       packaging_capacity: firstItem.packaging_capacity,
       use_cricut_cut: firstItem.use_cricut_cut,
       ink_cost_per_sheet: firstItem.ink_cost_per_sheet,
@@ -721,6 +742,7 @@
       `Paper: ${summary.paper || '-'}`,
       `Photo Top / Lamination: ${summary.lamination || 'None'}`,
       `OPP / Packaging: ${summary.packaging || 'None'}`,
+      `Other Direct Material: ${summary.otherMaterial || 'None'}`,
       `Capacity: ${summary.packagingCapacity || 1} sticker(s) per package`,
       `Cutting Mode: ${summary.costingMode || '-'}`,
       `Costing Qty / Sheet: ${summary.costingQtyPerSheet || 0}`,
@@ -730,6 +752,7 @@
       `- Ink: ${peso.format(summary.inkCost || 0)}`,
       `- Photo Top / Lamination: ${peso.format(summary.laminationCost || 0)}`,
       `- OPP / Packaging: ${peso.format(summary.packagingCost || 0)}`,
+      `- Other Direct Material: ${peso.format(summary.otherMaterialCost || 0)}`,
       `Your Calculation: ${peso.format(summary.rawMaterials || 0)}`,
       'System Adds:',
       `- Safety Buffer: ${peso.format(summary.safetyBuffer || 0)}`,

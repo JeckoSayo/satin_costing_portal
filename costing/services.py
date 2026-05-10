@@ -106,6 +106,7 @@ def calculate_quote(data):
     material = get_object_or_none(Material, data.get("material_id"))
     lamination = get_object_or_none(Material, data.get("lamination_id"))
     packaging = get_object_or_none(Material, data.get("packaging_id"))
+    other_material = get_object_or_none(Material, data.get("other_material_id"))
 
     use_cricut_cut_raw = data.get("use_cricut_cut")
     if use_cricut_cut_raw in (None, ""):
@@ -127,6 +128,7 @@ def calculate_quote(data):
     material_unit = D(material.unit_cost if material else 0)
     lamination_unit = D(lamination.unit_cost if lamination else 0)
     packaging_unit = D(packaging.unit_cost if packaging else 0)
+    other_material_unit = D(other_material.unit_cost if other_material else 0)
 
     packaging_capacity = D(data.get("packaging_capacity"), "0")
     if packaging_capacity <= 0 and packaging:
@@ -149,6 +151,7 @@ def calculate_quote(data):
     selected_material_total = sheets_needed * material_unit
     selected_lamination_total = sheets_needed * lamination_unit if lamination else Decimal("0")
     selected_packaging_total = packaging_qty * packaging_unit if packaging else Decimal("0")
+    selected_other_material_total = sheets_needed * other_material_unit if other_material else Decimal("0")
     ink_usage_total = sheets_needed * ink_cost_per_sheet
     safety_buffer_total = settings.safety_buffer_per_order
 
@@ -156,6 +159,7 @@ def calculate_quote(data):
         selected_material_total
         + selected_lamination_total
         + selected_packaging_total
+        + selected_other_material_total
         + ink_usage_total
         + safety_buffer_total
     )
@@ -210,6 +214,7 @@ def calculate_quote(data):
         "material_qty_used": money(sheets_needed if material else 0),
         "lamination_qty_used": money(sheets_needed if lamination else 0),
         "packaging_qty_used": money(packaging_qty if packaging else 0),
+        "other_material_qty_used": money(sheets_needed if other_material else 0),
     }
 
     return {
@@ -234,6 +239,7 @@ def calculate_quote(data):
             "selected_material": {"qty": int(sheets_needed), "unit": "sheet", "unit_cost": money(material_unit), "total": money(selected_material_total)},
             "selected_lamination": {"qty": int(sheets_needed) if lamination else 0, "unit": "sheet", "unit_cost": money(lamination_unit), "total": money(selected_lamination_total)},
             "selected_packaging": {"qty": int(packaging_qty) if packaging else 0, "unit": "pcs", "unit_cost": money(packaging_unit), "total": money(selected_packaging_total)},
+            "selected_other_material": {"qty": int(sheets_needed) if other_material else 0, "unit": other_material.unit if other_material else "sheet", "unit_cost": money(other_material_unit), "total": money(selected_other_material_total)},
             "ink_usage": {"qty": int(sheets_needed), "unit": "sheet", "unit_cost": money(ink_cost_per_sheet), "total": money(ink_usage_total)},
             "safety_buffer": {"qty": 1, "unit": "order", "unit_cost": money(safety_buffer_total), "total": money(safety_buffer_total)},
             "waste_buffer": {"qty": 1, "unit": "order", "unit_cost": money(waste_cost), "total": money(waste_cost)},
@@ -356,6 +362,7 @@ def create_sale_from_order_items(payload):
             "material_id": item.get("material_id"),
             "lamination_id": item.get("lamination_id"),
             "packaging_id": item.get("packaging_id"),
+            "other_material_id": item.get("other_material_id"),
             "packaging_capacity": item.get("packaging_capacity"),
             "use_cricut_cut": item.get("use_cricut_cut"),
             "ink_cost_per_sheet": item.get("ink_cost_per_sheet"),
@@ -436,6 +443,7 @@ def create_sale_from_order_items(payload):
         material = get_object_or_none(Material, item.get("material_id"))
         lamination = get_object_or_none(Material, item.get("lamination_id"))
         packaging = get_object_or_none(Material, item.get("packaging_id"))
+        other_material = get_object_or_none(Material, item.get("other_material_id"))
 
         sale_item = SaleLogItem.objects.create(
             sale=sale,
@@ -446,15 +454,18 @@ def create_sale_from_order_items(payload):
             material=material,
             lamination=lamination,
             packaging=packaging,
+            other_material=other_material,
             material_name=material.item_name if material else item.get("material_name", ""),
             lamination_name=lamination.item_name if lamination else item.get("lamination_name", ""),
             packaging_name=packaging.item_name if packaging else item.get("packaging_name", ""),
+            other_material_name=other_material.item_name if other_material else item.get("other_material_name", ""),
             quantity=int(D(item.get("quantity"), "0")),
             sheets_needed=int(D(result["sheets_needed"])),
             packaging_capacity=int(D(item.get("packaging_capacity"), "1")),
             material_qty_used=D(result["stock_plan"]["material_qty_used"]),
             lamination_qty_used=D(result["stock_plan"]["lamination_qty_used"]),
             packaging_qty_used=D(result["stock_plan"]["packaging_qty_used"]),
+            other_material_qty_used=D(result["stock_plan"]["other_material_qty_used"]),
             unit_price=money(result["price_per_piece"]),
             line_total=money(result["product_sale_price"]),
             line_cost=money(result["total_product_cost"]),
@@ -466,6 +477,7 @@ def create_sale_from_order_items(payload):
             _deduct_material(material, sale_item.material_qty_used, sale, sale_item, "Deducted from sale")
             _deduct_material(lamination, sale_item.lamination_qty_used, sale, sale_item, "Deducted from sale")
             _deduct_material(packaging, sale_item.packaging_qty_used, sale, sale_item, "Deducted from sale")
+            _deduct_material(other_material, sale_item.other_material_qty_used, sale, sale_item, "Deducted from sale")
 
     if _stock_is_deductible_status(sale.status):
         sale.stock_deducted = True
@@ -480,10 +492,11 @@ def reverse_sale_inventory(sale):
     if not sale.stock_deducted:
         return
 
-    for item in sale.items.select_related("material", "lamination", "packaging"):
+    for item in sale.items.select_related("material", "lamination", "packaging", "other_material"):
         _restore_material(item.material, item.material_qty_used, sale, item, "Restored from sale deletion/cancellation")
         _restore_material(item.lamination, item.lamination_qty_used, sale, item, "Restored from sale deletion/cancellation")
         _restore_material(item.packaging, item.packaging_qty_used, sale, item, "Restored from sale deletion/cancellation")
+        _restore_material(item.other_material, item.other_material_qty_used, sale, item, "Restored from sale deletion/cancellation")
 
     sale.stock_deducted = False
     sale.save(update_fields=["stock_deducted"])

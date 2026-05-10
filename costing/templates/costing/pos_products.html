@@ -1,13 +1,13 @@
 {% extends "costing/base.html" %}
 {% block content %}
-<div class="figma-dashboard">
-  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+<div class="figma-dashboard pos-products-page">
+  <div class="figma-page-head pos-products-head d-flex justify-content-between align-items-start gap-3">
     <div><h1 class="page-title mb-1">POS Products</h1><p class="page-subtitle mb-0">Edit 4-for-100, 3-for-100, photo prints, and other fast counter buttons.</p></div>
-    <div class="d-flex gap-2"><a href="{% url 'fast_pos' %}" class="btn figma-clear-btn">Back to POS</a><a href="{% url 'pos_product_add' %}" class="btn figma-log-btn">Add POS Product</a></div>
+    <div class="pos-products-actions d-flex gap-2"><a href="{% url 'fast_pos' %}" class="btn figma-clear-btn">Back to POS</a><a href="{% url 'pos_product_add' %}" class="btn figma-log-btn">Add POS Product</a></div>
   </div>
   <div class="figma-card">
     <div class="table-responsive">
-      <table class="table align-middle">
+      <table class="table align-middle pos-products-table">
         <thead><tr><th>Button</th><th>Material</th><th class="text-end">Price</th><th class="text-end">Cost</th><th class="text-end">Profit</th><th class="text-end">Margin</th><th>Status</th><th></th></tr></thead>
         <tbody>
           {% for p in pos_products %}

@@ -1,7 +1,7 @@
 {% extends "costing/base.html" %}
 
 {% block content %}
-<div class="figma-dashboard">
+<div class="figma-dashboard smart-paste-page">
   <div class="figma-page-head">
     <div>
       <h1 class="page-title mb-1">Smart Paste</h1>
@@ -53,7 +53,7 @@
       </div>
     {% endif %}
 
-    <div class="figma-main-grid">
+    <div class="figma-main-grid smart-paste-result-grid">
       <div class="figma-card bg-light border-0">
         <h2>Extracted Details</h2>
         <div class="figma-metric-list">
@@ -70,10 +70,10 @@
         </div>
       </div>
 
-      <div class="figma-card bg-light border-0">
+      <div class="figma-card bg-light border-0 smart-paste-reply-card">
         <h2>Chat Reply</h2>
-        <textarea id="smartPasteReply" class="form-control figma-control" rows="8">{{ parsed.suggested_reply }}</textarea>
-        <button type="button" class="btn figma-log-btn mt-3" onclick="copySmartPasteReply()"><i class="bi bi-clipboard me-1"></i>Copy Reply</button>
+        <textarea id="smartPasteReply" class="form-control figma-control smart-paste-reply-box" rows="8">{{ parsed.suggested_reply }}</textarea>
+        <button type="button" class="btn figma-log-btn smart-paste-copy-btn" onclick="copySmartPasteReply()"><i class="bi bi-clipboard me-1"></i>Copy Reply</button>
       </div>
     </div>
   </div>
@@ -94,7 +94,19 @@
             <td>{% if inquiry.width_in and inquiry.height_in %}{{ inquiry.width_in }} x {{ inquiry.height_in }} in{% else %}-{% endif %}</td>
             <td>{{ inquiry.confidence_score }}%</td>
             <td><span class="badge bg-primary-subtle text-primary">{{ inquiry.status }}</span></td>
-            <td><a href="{% url 'smart_paste_edit' inquiry.pk %}" class="btn btn-sm btn-outline-primary">Review</a></td>
+            <td>
+              <div class="smart-paste-row-actions">
+                <a href="{% url 'smart_paste_edit' inquiry.pk %}" class="btn btn-sm btn-outline-primary action-icon-btn" title="Review inquiry" aria-label="Review inquiry">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                <form method="post" action="{% url 'smart_paste_delete' inquiry.pk %}" class="js-smart-paste-delete-form" data-inquiry-label="{{ inquiry.customer_name|default:'this inquiry' }}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger action-icon-btn" title="Delete inquiry" aria-label="Delete inquiry">
+                    <i class="bi bi-trash3"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
           </tr>
           {% empty %}
           <tr><td colspan="8" class="text-center text-muted py-4 fw-bold">No Smart Paste inquiries yet.</td></tr>
@@ -104,6 +116,8 @@
     </div>
   </div>
 </div>
+
+<div class="toast-ui-stack" id="smartPasteToastStack" aria-live="polite" aria-atomic="true"></div>
 {% endblock %}
 
 {% block scripts %}
@@ -118,5 +132,77 @@ function copySmartPasteReply() {
   field?.select();
   document.execCommand('copy');
 }
+
+let pendingSmartPasteDeleteForm = null;
+let smartPasteToastTimer = null;
+
+function hideSmartPasteToast() {
+  const stack = document.getElementById('smartPasteToastStack');
+  if (!stack) return;
+  stack.innerHTML = '';
+  pendingSmartPasteDeleteForm = null;
+  if (smartPasteToastTimer) {
+    clearTimeout(smartPasteToastTimer);
+    smartPasteToastTimer = null;
+  }
+}
+
+function escapeToastText(value) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(value || '').replace(/[&<>"']/g, function (char) {
+    return map[char];
+  });
+}
+
+function showSmartPasteDeleteToast(form) {
+  const stack = document.getElementById('smartPasteToastStack');
+  if (!stack) return;
+
+  pendingSmartPasteDeleteForm = form;
+  const label = escapeToastText(form.dataset.inquiryLabel || 'this inquiry');
+
+  stack.innerHTML = `
+    <div class="toast-ui-card toast-ui-warning" role="alert">
+      <div class="toast-ui-accent"></div>
+      <div class="toast-ui-icon"><i class="bi bi-exclamation-lg"></i></div>
+      <div class="toast-ui-content">
+        <strong>Delete Smart Paste inquiry?</strong>
+        <span>This will remove ${label} from recent inquiries.</span>
+        <div class="toast-ui-actions">
+          <button type="button" class="btn toast-ui-cancel" data-toast-cancel>Cancel</button>
+          <button type="button" class="btn toast-ui-danger" data-toast-confirm>Delete</button>
+        </div>
+      </div>
+      <button type="button" class="toast-ui-close" data-toast-cancel aria-label="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+  `;
+
+  stack.querySelectorAll('[data-toast-cancel]').forEach(button => {
+    button.addEventListener('click', hideSmartPasteToast);
+  });
+
+  stack.querySelector('[data-toast-confirm]')?.addEventListener('click', function () {
+    const selectedForm = pendingSmartPasteDeleteForm;
+    hideSmartPasteToast();
+    selectedForm?.submit();
+  });
+
+  smartPasteToastTimer = setTimeout(hideSmartPasteToast, 9000);
+}
+
+document.querySelectorAll('.js-smart-paste-delete-form').forEach(form => {
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    showSmartPasteDeleteToast(form);
+  });
+});
 </script>
 {% endblock %}
