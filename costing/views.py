@@ -69,7 +69,6 @@ class DashboardView(TemplateView):
         ctx["settings"] = settings
         ctx["sticker_sizes"] = StickerSize.objects.filter(is_active=True)
         ctx["paper_sizes"] = PaperSize.objects.filter(is_active=True)
-        ctx["paper_sizes"] = PaperSize.objects.filter(is_active=True)
         ctx["main_materials"] = Material.objects.filter(
             is_active=True,
             category=Material.CATEGORY_STICKER
@@ -192,6 +191,8 @@ class SimpleCostingCalculatorView(TemplateView):
         ctx["platform_choices"] = SaleLog.PLATFORM_CHOICES
         ctx["payment_choices"] = SaleLog.PAYMENT_CHOICES
         ctx["status_choices"] = SaleLog.STATUS_CHOICES
+
+        ctx["paper_sizes"] = PaperSize.objects.filter(is_active=True).order_by("name")
         return ctx
 
 

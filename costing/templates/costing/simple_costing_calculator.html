@@ -100,7 +100,7 @@
                 <option value="" data-width="8.27" data-height="11.69" data-cricut-width="7.19" data-cricut-height="9.70">A4 default</option>
                 {% for paper in paper_sizes %}
                   <option value="{{ paper.id }}" data-width="{{ paper.width_in }}" data-height="{{ paper.height_in }}" data-cricut-width="{{ paper.cricut_safe_width_in }}" data-cricut-height="{{ paper.cricut_safe_height_in }}">
-                    {{ paper.name }} â€” {{ paper.width_in }} x {{ paper.height_in }} in
+                    {{ paper.name }} - {{ paper.width_in }} x {{ paper.height_in }} in
                   </option>
                 {% endfor %}
               </select>
