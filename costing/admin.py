@@ -17,8 +17,8 @@ from .models import (
 
 @admin.register(Material)
 class MaterialAdmin(admin.ModelAdmin):
-    list_display = ("item_name", "category", "stock_qty", "reorder_level", "unit", "unit_cost", "is_active")
-    list_filter = ("category", "use_type", "is_active")
+    list_display = ("item_name", "category", "costing_basis", "stock_qty", "reorder_level", "unit", "unit_cost", "is_active")
+    list_filter = ("category", "costing_basis", "use_type", "is_active")
     search_fields = ("item_name", "sku", "supplier")
     readonly_fields = ("unit_cost",)
 

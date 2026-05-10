@@ -81,6 +81,17 @@
         </div>
 
         <div>
+          <label class="form-label" for="{{ form.costing_basis.id_for_label }}">Costing Basis</label>
+          {{ form.costing_basis }}
+          {% if form.costing_basis.errors %}
+            <div class="field-error">{{ form.costing_basis.errors }}</div>
+          {% endif %}
+          <small class="text-muted d-block mt-1">
+            Used by Other Direct Material: per sheet, per piece, or once per order.
+          </small>
+        </div>
+
+        <div>
           <label class="form-label" for="{{ form.sku.id_for_label }}">SKU</label>
           {{ form.sku }}
           {% if form.sku.errors %}

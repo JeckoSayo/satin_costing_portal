@@ -119,9 +119,11 @@
 
     const stock = row.querySelector("[data-material-stock]");
     const unitCost = row.querySelector("[data-material-unit-cost]");
+    const basis = row.querySelector("[data-material-basis]");
     const status = row.querySelector("[data-material-stock-status]");
     if (stock) stock.textContent = Number(material.stock_qty || 0).toFixed(0);
     if (unitCost) unitCost.textContent = peso(material.unit_cost);
+    if (basis) basis.textContent = material.costing_basis_label || "";
     if (status) {
       status.innerHTML = material.stock_qty <= 0
         ? `<span class="materials-badge red">Out</span>`

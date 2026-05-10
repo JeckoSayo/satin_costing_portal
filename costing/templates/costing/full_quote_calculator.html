@@ -133,6 +133,9 @@
 
         <div class="figma-metric-list">
           <div><span>Current Qty</span><strong id="currentQty">0</strong></div>
+          <div><span>Size Mode</span><strong id="sizeModeText">-</strong></div>
+          <div><span>Sticker Size</span><strong id="stickerDimensionsText">-</strong></div>
+          <div><span>Orientation Used</span><strong id="orientationUsed">-</strong></div>
           <div><span>Costing Qty / Sheet</span><strong id="costingQtyText">0</strong></div>
           <div><span>Print Sheets Needed</span><strong id="sheetsNeeded">0</strong></div>
           <div class="metric-blue"><span>Price / Piece</span><strong id="pricePiece">₱0.00</strong></div>
@@ -167,6 +170,14 @@
 
               <div class="figma-field">
                 <label>Size Mode</label>
+                <select id="sizeMode" class="form-select figma-control user-input">
+                  <option value="preset">Preset Size</option>
+                  <option value="custom">Custom Size</option>
+                </select>
+              </div>
+
+              <div class="figma-field" id="presetSizeWrap">
+                <label>Sticker Size</label>
                 <select id="stickerSize" class="form-select figma-control user-input">
                   <option value="">Select size</option>
                   {% for size in sticker_sizes %}
@@ -218,6 +229,10 @@
                     <input type="number" id="customHeight" class="form-control figma-control user-input" min="0" step="0.01" placeholder="e.g. 1.5">
                   </div>
                   <div class="figma-field">
+                    <label>Custom Name</label>
+                    <input type="text" id="customName" class="form-control figma-control user-input" placeholder="Custom 2 x 2 in">
+                  </div>
+                  <div class="figma-field">
                     <label>Unit</label>
                     <select id="customSizeUnit" class="form-select figma-control user-input">
                       <option value="in">inches</option>
@@ -244,6 +259,12 @@
                       </label>
                     </div>
                     <small class="text-muted">Unchecked = print-only mode uses the full selected paper size.</small>
+                  </div>
+                  <div class="figma-field full">
+                    <div class="form-check d-flex align-items-center gap-2">
+                      <input type="checkbox" id="saveCustomSize" class="form-check-input user-input">
+                      <label class="form-check-label fw-bold mb-0" for="saveCustomSize">Save this size to Sticker Size Guide</label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -399,12 +420,12 @@
                 <select id="otherMaterialCost" class="form-select figma-control user-input">
                   <option value="0">None</option>
                   {% for material in other_materials %}
-                    <option value="{{ material.unit_cost }}" data-id="{{ material.id }}" data-stock="{{ material.stock_qty }}">
+                    <option value="{{ material.unit_cost }}" data-id="{{ material.id }}" data-stock="{{ material.stock_qty }}" data-basis="{{ material.costing_basis }}" data-unit="{{ material.unit }}">
                       {{ material.item_name }} â€” Stock: {{ material.stock_qty }} {{ material.unit }}
                     </option>
                   {% endfor %}
                 </select>
-                <small class="text-muted">Use for magnetic sheet, acrylic backing, board, or other sheet-based add-ons.</small>
+                <small class="text-muted">Use for sheet add-ons, per-piece add-ons, or one-time per-order fees.</small>
               </div>
 
               <div class="figma-field">
@@ -648,7 +669,7 @@
               <tr>
                 <td>Other Direct Material</td>
                 <td class="text-end" id="otherMaterialQty">0</td>
-                <td>sheet</td>
+                <td id="otherMaterialUnit">sheet</td>
                 <td class="text-end" id="otherMaterialTotal">â‚±0.00</td>
               </tr>
 
@@ -893,6 +914,9 @@ function resetQuoteOutputs() {
 
   setText("targetSalePriceResult", "-");
   setText("discountTotal", "-");
+  setText("sizeModeText", "-");
+  setText("stickerDimensionsText", "-");
+  setText("orientationUsed", "-");
   setText("pricingReason", "-");
   setText("bufferPercentText", "0%");
   setText("laborMinutesText", "Auto: " + money(0));
@@ -921,14 +945,26 @@ function getSelectedDataId(id) {
   return select.options[select.selectedIndex].dataset.id || "";
 }
 
+function getSelectedDataset(id, key, fallback = "") {
+  const select = document.getElementById(id);
+  if (!select || select.selectedIndex < 0) return fallback;
+  return select.options[select.selectedIndex].dataset[key] || fallback;
+}
+
 function syncCustomSizePanel() {
   const sizeSelect = document.getElementById("stickerSize");
+  const modeSelect = document.getElementById("sizeMode");
   const panel = document.getElementById("customSizePanel");
+  const presetWrap = document.getElementById("presetSizeWrap");
   if (!sizeSelect || !panel) return;
-  if (sizeSelect.value === "custom") {
+  const isCustom = modeSelect?.value === "custom" || sizeSelect.value === "custom";
+  if (modeSelect && sizeSelect.value === "custom") modeSelect.value = "custom";
+  if (isCustom) {
     panel.classList.remove("d-none");
+    presetWrap?.classList.add("d-none");
   } else {
     panel.classList.add("d-none");
+    presetWrap?.classList.remove("d-none");
   }
 }
 
@@ -957,15 +993,27 @@ function calculateFitPerSheet(itemWidth, itemHeight) {
   return Math.max(normal, rotated, 0);
 }
 
+function getFitDetails(itemWidth, itemHeight) {
+  const paper = getActivePaperArea();
+  if (itemWidth <= 0 || itemHeight <= 0) {
+    return { fit: 0, orientation: "-", normal: 0, rotated: 0 };
+  }
+  const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
+  const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
+  return rotated > normal
+    ? { fit: rotated, orientation: "Rotated", normal, rotated }
+    : { fit: normal, orientation: "Normal", normal, rotated };
+}
+
 function getStickersPerSheet() {
   const sizeSelect = document.getElementById("stickerSize");
   if (!sizeSelect || sizeSelect.selectedIndex < 0) return 1;
 
-  if (sizeSelect.value === "custom") {
+  if (document.getElementById("sizeMode")?.value === "custom" || sizeSelect.value === "custom") {
     const unit = document.getElementById("customSizeUnit")?.value || "in";
     const width = toInches(document.getElementById("customWidth")?.value, unit);
     const height = toInches(document.getElementById("customHeight")?.value, unit);
-    return calculateFitPerSheet(width, height) || 0;
+    return getFitDetails(width, height).fit || 0;
   }
 
   const selectedOption = sizeSelect.options[sizeSelect.selectedIndex];
@@ -974,7 +1022,7 @@ function getStickersPerSheet() {
 
 function getStickerSizeText() {
   const sizeSelect = document.getElementById("stickerSize");
-  if (sizeSelect?.value === "custom") {
+  if (document.getElementById("sizeMode")?.value === "custom" || sizeSelect?.value === "custom") {
     const unit = document.getElementById("customSizeUnit")?.value || "in";
     const widthRaw = Number(document.getElementById("customWidth")?.value || 0);
     const heightRaw = Number(document.getElementById("customHeight")?.value || 0);
@@ -989,7 +1037,7 @@ function getStickerSizeText() {
 
 function getCurrentItemDimensionsInches() {
   const sizeSelect = document.getElementById("stickerSize");
-  if (sizeSelect?.value === "custom") {
+  if (document.getElementById("sizeMode")?.value === "custom" || sizeSelect?.value === "custom") {
     const unit = document.getElementById("customSizeUnit")?.value || "in";
     return {
       width: toInches(document.getElementById("customWidth")?.value, unit),
@@ -1172,7 +1220,17 @@ function calculateQuote() {
       : 0;
 
   const packagingTotal = packagingQty * packagingUnitCost;
-  const otherMaterialTotal = sheetsNeeded * otherMaterialUnitCost;
+  const otherMaterialBasis = getSelectedDataset("otherMaterialCost", "basis", "per_sheet");
+  const otherMaterialUnit = otherMaterialBasis === "per_order"
+    ? "order"
+    : getSelectedDataset("otherMaterialCost", "unit", otherMaterialBasis === "per_piece" ? "pcs" : "sheet");
+  let otherMaterialQty = 0;
+  if (otherMaterialUnitCost > 0) {
+    if (otherMaterialBasis === "per_piece") otherMaterialQty = qty;
+    else if (otherMaterialBasis === "per_order") otherMaterialQty = 1;
+    else otherMaterialQty = sheetsNeeded;
+  }
+  const otherMaterialTotal = otherMaterialQty * otherMaterialUnitCost;
   const inkTotal = sheetsNeeded * inkCostPerSheet;
 
   const baseMaterialCost =
@@ -1228,6 +1286,12 @@ function calculateQuote() {
   updateLeadTimeEstimate();
 
   setText("currentQty", qty);
+  const isCustomSize = document.getElementById("sizeMode")?.value === "custom" || document.getElementById("stickerSize")?.value === "custom";
+  const dimsForDisplay = getCurrentItemDimensionsInches();
+  const fitDetails = isCustomSize ? getFitDetails(dimsForDisplay.width, dimsForDisplay.height) : { orientation: "Normal" };
+  setText("sizeModeText", isCustomSize ? "Custom Size" : "Preset Size");
+  setText("stickerDimensionsText", dimsForDisplay.width && dimsForDisplay.height ? `${dimsForDisplay.width.toFixed(2)} x ${dimsForDisplay.height.toFixed(2)} in` : "-");
+  setText("orientationUsed", fitDetails.orientation || "-");
   setText("costingQtyText", costingQtySheet);
   setText("sheetsNeeded", sheetsNeeded);
   setText("pricePiece", money(pricePiece));
@@ -1268,7 +1332,8 @@ function calculateQuote() {
   setText("packagingUnitPrice", money(packagingUnitCost));
   setText("packagingTotal", money(packagingTotal));
 
-  setText("otherMaterialQty", otherMaterialUnitCost > 0 ? sheetsNeeded : 0);
+  setText("otherMaterialQty", otherMaterialQty);
+  setText("otherMaterialUnit", otherMaterialUnit);
   setText("otherMaterialTotal", money(otherMaterialTotal));
 
   setText("inkQty", sheetsNeeded);
@@ -1310,17 +1375,26 @@ function getCurrentItemData() {
   const packagingQtyUsed = cleanMoney(
     document.getElementById("packagingQty").innerText
   );
-  const otherMaterialQtyUsed =
-    numberValue("otherMaterialCost") > 0
-      ? numberValue("printSheetsInput")
-      : 0;
+  const otherMaterialQtyUsed = cleanMoney(document.getElementById("otherMaterialQty").innerText);
+  const isCustomSize = document.getElementById("sizeMode")?.value === "custom" || document.getElementById("stickerSize")?.value === "custom";
+  const paperSelect = document.getElementById("paperSizeProfile");
+  const paperOption = paperSelect?.options[paperSelect.selectedIndex];
+  const useCricut = document.getElementById("useCricutSafeArea")?.checked;
 
   return {
     sku: "",
 
     product_name: document.getElementById("orderName").value.trim(),
     sticker_size: getStickerSizeText(),
-    sticker_size_id: document.getElementById("stickerSize").value,
+    sticker_size_id: isCustomSize ? "custom" : document.getElementById("stickerSize").value,
+    size_mode: isCustomSize ? "custom" : "preset",
+    custom_width: isCustomSize ? toInches(document.getElementById("customWidth")?.value, document.getElementById("customSizeUnit")?.value || "in") : "",
+    custom_height: isCustomSize ? toInches(document.getElementById("customHeight")?.value, document.getElementById("customSizeUnit")?.value || "in") : "",
+    custom_name: isCustomSize ? document.getElementById("customName")?.value || getStickerSizeText() : "",
+    save_custom_size: document.getElementById("saveCustomSize")?.checked ? "1" : "",
+    paper_size_id: isCustomSize ? paperSelect?.value || "" : "",
+    printable_width: isCustomSize && paperOption ? (useCricut ? paperOption.dataset.cricutWidth : paperOption.dataset.width) : "",
+    printable_height: isCustomSize && paperOption ? (useCricut ? paperOption.dataset.cricutHeight : paperOption.dataset.height) : "",
 
     material_id: getSelectedDataId("materialCost"),
     lamination_id: getSelectedDataId("laminationCost"),
@@ -1543,11 +1617,13 @@ function applyQuickPreset(name) {
   const cricut = document.getElementById("useCricutSafeArea");
   if (cricut) cricut.checked = !!preset.cricut;
   if (preset.custom) {
+    setValue("sizeMode", "custom");
     setValue("stickerSize", "custom");
     setValue("customWidth", preset.width);
     setValue("customHeight", preset.height);
     setValue("customSizeUnit", "in");
   } else {
+    setValue("sizeMode", "preset");
     selectFirstSizeContaining(preset.sizeText);
   }
   syncCustomSizePanel();
@@ -1598,7 +1674,7 @@ document.addEventListener("DOMContentLoaded", function () {
       field.addEventListener("change", calculateQuote);
     });
 
-  ["stickerSize", "customWidth", "customHeight", "customSizeUnit", "paperSizeProfile", "useCricutSafeArea", "productType", "cutComplexity"].forEach(function (id) {
+  ["sizeMode", "stickerSize", "customWidth", "customHeight", "customName", "customSizeUnit", "paperSizeProfile", "useCricutSafeArea", "saveCustomSize", "productType", "cutComplexity"].forEach(function (id) {
     document.getElementById(id)?.addEventListener("change", function () {
       syncCustomSizePanel();
       calculateQuote();

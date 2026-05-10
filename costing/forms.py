@@ -26,6 +26,7 @@ class MaterialForm(BootstrapModelForm):
             "stock_qty",
             "reorder_level",
             "unit",
+            "costing_basis",
             "sku",
             "supplier",
             "use_type",
@@ -120,7 +121,18 @@ class QuoteForm(forms.Form):
     customer_name = forms.CharField(required=False)
     order_name = forms.CharField(required=False)
 
-    sticker_size_id = forms.IntegerField(min_value=1)
+    sticker_size_id = forms.CharField(required=False)
+    size_mode = forms.ChoiceField(
+        required=False,
+        choices=[("preset", "Preset Size"), ("custom", "Custom Size")],
+    )
+    custom_width = forms.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=0)
+    custom_height = forms.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=0)
+    custom_name = forms.CharField(required=False)
+    save_custom_size = forms.BooleanField(required=False)
+    paper_size_id = forms.IntegerField(required=False, min_value=1)
+    printable_width = forms.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=0)
+    printable_height = forms.DecimalField(required=False, max_digits=8, decimal_places=2, min_value=0)
     quantity = forms.IntegerField(min_value=0)
 
     material_id = forms.IntegerField(required=False, min_value=1)

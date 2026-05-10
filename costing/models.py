@@ -104,6 +104,16 @@ class Material(models.Model):
         (USE_TOOL, "Tool"),
     ]
 
+    BASIS_PER_SHEET = "per_sheet"
+    BASIS_PER_PIECE = "per_piece"
+    BASIS_PER_ORDER = "per_order"
+
+    COSTING_BASIS_CHOICES = [
+        (BASIS_PER_SHEET, "Per Print Sheet"),
+        (BASIS_PER_PIECE, "Per Piece"),
+        (BASIS_PER_ORDER, "Per Order"),
+    ]
+
     category = models.CharField(max_length=40, choices=CATEGORY_CHOICES)
     item_name = models.CharField(max_length=180, unique=True)
     pack_price = models.DecimalField(max_digits=12, decimal_places=2)
@@ -115,6 +125,12 @@ class Material(models.Model):
         help_text="Current stock on hand. Example: sheets, pcs, bags."
     )
     unit = models.CharField(max_length=40)
+    costing_basis = models.CharField(
+        max_length=20,
+        choices=COSTING_BASIS_CHOICES,
+        default=BASIS_PER_SHEET,
+        help_text="How this material is costed when used as Other Direct Material.",
+    )
     reorder_level = models.DecimalField(
         max_digits=12,
         decimal_places=2,

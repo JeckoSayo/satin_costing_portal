@@ -1,8 +1,9 @@
-from decimal import Decimal, ROUND_CEILING, ROUND_HALF_UP, ROUND_UP
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, ROUND_UP
 from django.db import transaction
 from django.db.models import F
 from .models import (
     Material,
+    PaperSize,
     StickerSize,
     PriceSetting,
     EquipmentOverhead,
@@ -37,6 +38,157 @@ def get_object_or_none(model, pk):
         return model.objects.get(pk=pk)
     except (model.DoesNotExist, ValueError, TypeError):
         return None
+
+
+def calculate_fit_per_sheet(width, height, printable_width, printable_height):
+    width = D(width)
+    height = D(height)
+    printable_width = D(printable_width)
+    printable_height = D(printable_height)
+
+    if width <= 0 or height <= 0:
+        raise ValueError("Custom width and height must be greater than 0.")
+
+    normal_fit = (
+        int((printable_width / width).to_integral_value(rounding=ROUND_FLOOR))
+        * int((printable_height / height).to_integral_value(rounding=ROUND_FLOOR))
+    )
+    rotated_fit = (
+        int((printable_width / height).to_integral_value(rounding=ROUND_FLOOR))
+        * int((printable_height / width).to_integral_value(rounding=ROUND_FLOOR))
+    )
+
+    if normal_fit <= 0 and rotated_fit <= 0:
+        raise ValueError("Custom size does not fit inside the selected print area.")
+
+    if rotated_fit > normal_fit:
+        return {
+            "fit_per_sheet": rotated_fit,
+            "orientation": "Rotated",
+            "normal_fit": normal_fit,
+            "rotated_fit": rotated_fit,
+        }
+
+    return {
+        "fit_per_sheet": normal_fit,
+        "orientation": "Normal",
+        "normal_fit": normal_fit,
+        "rotated_fit": rotated_fit,
+    }
+
+
+def calculate_material_cost(material, sheets_needed, quantity_ordered):
+    if not material:
+        return {
+            "qty": Decimal("0"),
+            "unit": "sheet",
+            "unit_cost": Decimal("0.00"),
+            "total": Decimal("0.00"),
+            "basis": Material.BASIS_PER_SHEET,
+            "basis_label": "Per Print Sheet",
+        }
+
+    basis = material.costing_basis or Material.BASIS_PER_SHEET
+    if basis == Material.BASIS_PER_PIECE:
+        qty = D(quantity_ordered)
+        unit_label = material.unit or "pcs"
+    elif basis == Material.BASIS_PER_ORDER:
+        qty = Decimal("1")
+        unit_label = "order"
+    else:
+        qty = D(sheets_needed)
+        unit_label = material.unit or "sheet"
+
+    unit_cost = D(material.unit_cost)
+    return {
+        "qty": qty,
+        "unit": unit_label,
+        "unit_cost": unit_cost,
+        "total": qty * unit_cost,
+        "basis": basis,
+        "basis_label": material.get_costing_basis_display(),
+    }
+
+
+def _custom_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_size_for_quote(data, use_cricut_cut):
+    sticker_size_id = data.get("sticker_size_id")
+    size_mode = data.get("size_mode") or ("custom" if str(sticker_size_id) == "custom" else "preset")
+
+    if size_mode != "custom":
+        sticker_size = get_object_or_none(StickerSize, sticker_size_id)
+        if not sticker_size:
+            raise ValueError("Please select a sticker size.")
+        return {
+            "sticker_size": sticker_size,
+            "name": sticker_size.name,
+            "width": D(sticker_size.width_in),
+            "height": D(sticker_size.height_in),
+            "fit_per_sheet": D(sticker_size.get_fit(use_cricut=use_cricut_cut)),
+            "orientation": "Normal",
+            "normal_fit": sticker_size.get_fit(use_cricut=use_cricut_cut),
+            "rotated_fit": 0,
+            "size_mode": "Preset Size",
+            "paper_size": sticker_size.paper_size,
+            "printable_width": D(sticker_size.paper_size.cricut_safe_width_in if sticker_size.paper_size and use_cricut_cut else sticker_size.paper_size.width_in if sticker_size.paper_size else "8.27"),
+            "printable_height": D(sticker_size.paper_size.cricut_safe_height_in if sticker_size.paper_size and use_cricut_cut else sticker_size.paper_size.height_in if sticker_size.paper_size else "11.69"),
+        }
+
+    width = D(data.get("custom_width"))
+    height = D(data.get("custom_height"))
+    paper_size = get_object_or_none(PaperSize, data.get("paper_size_id"))
+
+    if paper_size:
+        printable_width = paper_size.cricut_safe_width_in if use_cricut_cut else paper_size.width_in
+        printable_height = paper_size.cricut_safe_height_in if use_cricut_cut else paper_size.height_in
+    else:
+        printable_width = D(data.get("printable_width"), "7.19" if use_cricut_cut else "8.27")
+        printable_height = D(data.get("printable_height"), "9.70" if use_cricut_cut else "11.69")
+
+    fit = calculate_fit_per_sheet(width, height, printable_width, printable_height)
+    custom_name = (data.get("custom_name") or "").strip() or f"Custom {width} x {height} in"
+
+    if _custom_bool(data.get("save_custom_size")):
+        existing = StickerSize.objects.filter(
+            width_in=width,
+            height_in=height,
+            paper_size=paper_size,
+            use_cricut_safe_area=use_cricut_cut,
+        ).first()
+        if not existing:
+            existing = StickerSize.objects.create(
+                name=custom_name,
+                width_in=width,
+                height_in=height,
+                paper_size=paper_size,
+                use_cricut_safe_area=use_cricut_cut,
+                is_active=True,
+            )
+        sticker_size = existing
+        name = existing.name
+    else:
+        sticker_size = None
+        name = custom_name
+
+    return {
+        "sticker_size": sticker_size,
+        "name": name,
+        "width": width,
+        "height": height,
+        "fit_per_sheet": D(fit["fit_per_sheet"]),
+        "orientation": fit["orientation"],
+        "normal_fit": fit["normal_fit"],
+        "rotated_fit": fit["rotated_fit"],
+        "size_mode": "Custom Size",
+        "paper_size": paper_size,
+        "printable_width": D(printable_width),
+        "printable_height": D(printable_height),
+    }
 
 
 def round_selling_price(value, mode="ENDING_9"):
@@ -102,7 +254,6 @@ def calculate_quote(data):
     quantity = int(D(data.get("quantity"), "0"))
     platform = data.get("platform") or SaleLog.PLATFORM_WALKIN
 
-    sticker_size = get_object_or_none(StickerSize, data.get("sticker_size_id"))
     material = get_object_or_none(Material, data.get("material_id"))
     lamination = get_object_or_none(Material, data.get("lamination_id"))
     packaging = get_object_or_none(Material, data.get("packaging_id"))
@@ -116,10 +267,9 @@ def calculate_quote(data):
     else:
         use_cricut_cut = str(use_cricut_cut_raw).strip().lower() in {"1", "true", "yes", "on"}
 
-    if sticker_size:
-        costing_qty_per_sheet = D(sticker_size.get_fit(use_cricut=use_cricut_cut))
-    else:
-        costing_qty_per_sheet = Decimal("0")
+    size_info = _resolve_size_for_quote(data, use_cricut_cut)
+    sticker_size = size_info["sticker_size"]
+    costing_qty_per_sheet = D(size_info["fit_per_sheet"])
 
     sheets_needed = Decimal("0")
     if quantity > 0 and costing_qty_per_sheet > 0:
@@ -128,7 +278,8 @@ def calculate_quote(data):
     material_unit = D(material.unit_cost if material else 0)
     lamination_unit = D(lamination.unit_cost if lamination else 0)
     packaging_unit = D(packaging.unit_cost if packaging else 0)
-    other_material_unit = D(other_material.unit_cost if other_material else 0)
+    other_material_cost = calculate_material_cost(other_material, sheets_needed, quantity)
+    other_material_unit = D(other_material_cost["unit_cost"])
 
     packaging_capacity = D(data.get("packaging_capacity"), "0")
     if packaging_capacity <= 0 and packaging:
@@ -151,7 +302,7 @@ def calculate_quote(data):
     selected_material_total = sheets_needed * material_unit
     selected_lamination_total = sheets_needed * lamination_unit if lamination else Decimal("0")
     selected_packaging_total = packaging_qty * packaging_unit if packaging else Decimal("0")
-    selected_other_material_total = sheets_needed * other_material_unit if other_material else Decimal("0")
+    selected_other_material_total = other_material_cost["total"] if other_material else Decimal("0")
     ink_usage_total = sheets_needed * ink_cost_per_sheet
     safety_buffer_total = settings.safety_buffer_per_order
 
@@ -214,18 +365,26 @@ def calculate_quote(data):
         "material_qty_used": money(sheets_needed if material else 0),
         "lamination_qty_used": money(sheets_needed if lamination else 0),
         "packaging_qty_used": money(packaging_qty if packaging else 0),
-        "other_material_qty_used": money(sheets_needed if other_material else 0),
+        "other_material_qty_used": money(other_material_cost["qty"] if other_material else 0),
     }
 
     return {
         "quantity": quantity,
-        "sticker_size": sticker_size.name if sticker_size else "",
+        "sticker_size": size_info["name"],
+        "size_mode": size_info["size_mode"],
+        "sticker_width_in": money(size_info["width"]),
+        "sticker_height_in": money(size_info["height"]),
+        "printable_width_in": money(size_info["printable_width"]),
+        "printable_height_in": money(size_info["printable_height"]),
+        "orientation_used": size_info["orientation"],
+        "normal_fit": size_info["normal_fit"],
+        "rotated_fit": size_info["rotated_fit"],
         "costing_qty_per_sheet": int(costing_qty_per_sheet or 0),
         "use_cricut_cut": use_cricut_cut,
         "costing_mode": "Cricut cut" if use_cricut_cut else "Full sheet / print only",
         "packaging_capacity": int(packaging_capacity or 1),
-        "safe_fit": sticker_size.safe_fit if sticker_size else 0,
-        "max_tight_fit": sticker_size.max_tight_fit if sticker_size else 0,
+        "safe_fit": sticker_size.safe_fit if sticker_size else int(costing_qty_per_sheet or 0),
+        "max_tight_fit": sticker_size.max_tight_fit if sticker_size else int(costing_qty_per_sheet or 0),
         "sheets_needed": int(sheets_needed),
         "minimum_order_price": money(minimum_order_price),
         "waste_percent": money(settings.default_waste_percent),
@@ -239,7 +398,14 @@ def calculate_quote(data):
             "selected_material": {"qty": int(sheets_needed), "unit": "sheet", "unit_cost": money(material_unit), "total": money(selected_material_total)},
             "selected_lamination": {"qty": int(sheets_needed) if lamination else 0, "unit": "sheet", "unit_cost": money(lamination_unit), "total": money(selected_lamination_total)},
             "selected_packaging": {"qty": int(packaging_qty) if packaging else 0, "unit": "pcs", "unit_cost": money(packaging_unit), "total": money(selected_packaging_total)},
-            "selected_other_material": {"qty": int(sheets_needed) if other_material else 0, "unit": other_material.unit if other_material else "sheet", "unit_cost": money(other_material_unit), "total": money(selected_other_material_total)},
+            "selected_other_material": {
+                "qty": money(other_material_cost["qty"] if other_material else 0),
+                "unit": other_material_cost["unit"],
+                "unit_cost": money(other_material_unit),
+                "total": money(selected_other_material_total),
+                "basis": other_material_cost["basis"],
+                "basis_label": other_material_cost["basis_label"],
+            },
             "ink_usage": {"qty": int(sheets_needed), "unit": "sheet", "unit_cost": money(ink_cost_per_sheet), "total": money(ink_usage_total)},
             "safety_buffer": {"qty": 1, "unit": "order", "unit_cost": money(safety_buffer_total), "total": money(safety_buffer_total)},
             "waste_buffer": {"qty": 1, "unit": "order", "unit_cost": money(waste_cost), "total": money(waste_cost)},
@@ -358,6 +524,14 @@ def create_sale_from_order_items(payload):
     for item in items:
         quote_data = {
             "sticker_size_id": item.get("sticker_size_id") or item.get("sticker_size"),
+            "size_mode": item.get("size_mode"),
+            "custom_width": item.get("custom_width"),
+            "custom_height": item.get("custom_height"),
+            "custom_name": item.get("custom_name") or item.get("sticker_size"),
+            "save_custom_size": item.get("save_custom_size"),
+            "paper_size_id": item.get("paper_size_id"),
+            "printable_width": item.get("printable_width"),
+            "printable_height": item.get("printable_height"),
             "quantity": item.get("quantity"),
             "material_id": item.get("material_id"),
             "lamination_id": item.get("lamination_id"),
@@ -867,6 +1041,8 @@ def serialize_material(material):
         "pack_qty": _decimal_to_float(material.pack_qty),
         "stock_qty": _decimal_to_float(material.stock_qty),
         "unit": material.unit,
+        "costing_basis": material.costing_basis,
+        "costing_basis_label": material.get_costing_basis_display(),
         "unit_cost": _decimal_to_float(material.unit_cost),
         "reorder_level": _decimal_to_float(material.reorder_level),
         "is_active": material.is_active,

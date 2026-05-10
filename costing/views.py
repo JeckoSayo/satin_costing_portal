@@ -69,6 +69,7 @@ class DashboardView(TemplateView):
         ctx["settings"] = settings
         ctx["sticker_sizes"] = StickerSize.objects.filter(is_active=True)
         ctx["paper_sizes"] = PaperSize.objects.filter(is_active=True)
+        ctx["paper_sizes"] = PaperSize.objects.filter(is_active=True)
         ctx["main_materials"] = Material.objects.filter(
             is_active=True,
             category=Material.CATEGORY_STICKER
@@ -208,11 +209,24 @@ class CalculateQuoteView(View):
 
         cleaned_data = form.cleaned_data.copy()
 
-        # Keep custom fields from Simple Costing.
-        cleaned_data["use_cricut_cut"] = payload.get("use_cricut_cut")
-        cleaned_data["packaging_capacity"] = payload.get("packaging_capacity")
+        for field in [
+            "use_cricut_cut",
+            "packaging_capacity",
+            "size_mode",
+            "custom_width",
+            "custom_height",
+            "custom_name",
+            "save_custom_size",
+            "paper_size_id",
+            "printable_width",
+            "printable_height",
+        ]:
+            cleaned_data[field] = payload.get(field)
 
-        result = calculate_quote(cleaned_data)
+        try:
+            result = calculate_quote(cleaned_data)
+        except ValueError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
 
         return JsonResponse({"ok": True, "result": result})
 
@@ -232,6 +246,14 @@ class LogSaleView(View):
         item = {
             "product_name": payload.get("order_name", ""),
             "sticker_size_id": form.cleaned_data["sticker_size_id"],
+            "size_mode": payload.get("size_mode"),
+            "custom_width": payload.get("custom_width"),
+            "custom_height": payload.get("custom_height"),
+            "custom_name": payload.get("custom_name"),
+            "save_custom_size": payload.get("save_custom_size"),
+            "paper_size_id": payload.get("paper_size_id"),
+            "printable_width": payload.get("printable_width"),
+            "printable_height": payload.get("printable_height"),
             "quantity": form.cleaned_data["quantity"],
             "material_id": form.cleaned_data.get("material_id"),
             "lamination_id": form.cleaned_data.get("lamination_id"),

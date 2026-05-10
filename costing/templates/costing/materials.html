@@ -51,6 +51,7 @@
                         <th>Pack Qty</th>
                         <th>Stock</th>
                         <th>Unit</th>
+                        <th>Basis</th>
                         <th>Unit Cost</th>
                         <th>Status</th>
                         <th class="text-center" style="width:110px;">Actions</th>
@@ -109,6 +110,8 @@
 
                         <td>{{ material.unit }}</td>
 
+                        <td data-material-basis>{{ material.get_costing_basis_display }}</td>
+
                         <td data-material-unit-cost>₱{{ material.unit_cost|floatformat:2 }}</td>
 
                         <td>
@@ -150,7 +153,7 @@
                 {% empty %}
 
                     <tr>
-                        <td colspan="10" class="text-center py-5 text-muted fw-bold">
+                        <td colspan="11" class="text-center py-5 text-muted fw-bold">
                             No materials found.
                         </td>
                     </tr>
@@ -233,7 +236,7 @@ $(document).ready(function () {
         order: [[2,'asc']],
         columnDefs: [
             {
-                targets: [0,9],
+                targets: [0,10],
                 orderable:false,
                 searchable:false
             }

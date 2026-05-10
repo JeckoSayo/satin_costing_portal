@@ -57,6 +57,13 @@
           <input type="number" id="quantity" class="form-control figma-control" value="" placeholder="50" step="1" min="0">
         </div>
         <div class="figma-field">
+          <label>Size Mode</label>
+          <select id="sizeMode" class="form-select figma-control">
+            <option value="preset">Preset Size</option>
+            <option value="custom">Custom Size</option>
+          </select>
+        </div>
+        <div class="figma-field" id="presetSizeWrap">
           <label>Sticker Size</label>
           <select id="stickerSize" class="form-select figma-control">
             <option value="">Select size</option>
@@ -64,12 +71,47 @@
               <option value="{{ size.id }}"
                       data-cricut-qty="{{ size.safe_fit }}"
                       data-full-qty="{{ size.max_tight_fit }}"
-                      data-per-sheet="{{ size.best_for_costing }}">
+                      data-per-sheet="{{ size.best_for_costing }}"
+                      data-width="{{ size.width_in }}"
+                      data-height="{{ size.height_in }}">
                 {{ size.name }} — Cricut {{ size.safe_fit }} / Full {{ size.max_tight_fit }} pcs/sheet
               </option>
             {% endfor %}
           </select>
           <small class="text-muted">Choose the size. The Cricut cut option below controls which qty/sheet is used.</small>
+        </div>
+        <div class="figma-field full d-none" id="customSizeWrap">
+          <div class="order-details-grid">
+            <div class="figma-field">
+              <label>Custom Width (inches)</label>
+              <input type="number" id="customWidth" class="form-control figma-control" min="0" step="0.01" placeholder="2.00">
+            </div>
+            <div class="figma-field">
+              <label>Custom Height (inches)</label>
+              <input type="number" id="customHeight" class="form-control figma-control" min="0" step="0.01" placeholder="2.00">
+            </div>
+            <div class="figma-field">
+              <label>Custom Name</label>
+              <input type="text" id="customName" class="form-control figma-control" placeholder="Custom 2 x 2 in">
+            </div>
+            <div class="figma-field">
+              <label>Paper / Print Area</label>
+              <select id="paperSizeId" class="form-select figma-control">
+                <option value="" data-width="8.27" data-height="11.69" data-cricut-width="7.19" data-cricut-height="9.70">A4 default</option>
+                {% for paper in paper_sizes %}
+                  <option value="{{ paper.id }}" data-width="{{ paper.width_in }}" data-height="{{ paper.height_in }}" data-cricut-width="{{ paper.cricut_safe_width_in }}" data-cricut-height="{{ paper.cricut_safe_height_in }}">
+                    {{ paper.name }} â€” {{ paper.width_in }} x {{ paper.height_in }} in
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="figma-field full">
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="saveCustomSize">
+                <label class="form-check-label fw-bold" for="saveCustomSize">Save this size to Sticker Size Guide</label>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="figma-field">
           <label>Platform</label>
@@ -158,12 +200,12 @@
           <select id="otherMaterialId" class="form-select figma-control">
             <option value="">None</option>
             {% for material in other_materials %}
-              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}">
+              <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}" data-basis="{{ material.costing_basis }}">
                 {{ material.item_name }} â€” â‚±{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
               </option>
             {% endfor %}
           </select>
-          <small class="text-muted">Use for magnetic sheet or other add-on material used per print sheet.</small>
+          <small class="text-muted">Use for magnetic sheets, ready-cut magnets, backing cards, or one-time setup fees.</small>
         </div>
       </div>
     </div>
@@ -206,6 +248,9 @@
       <h2>Simple Costing Result</h2>
       <div class="figma-metric-list">
         <div><span>Sticker Size</span><strong id="selectedSizeText">-</strong></div>
+        <div><span>Size Mode</span><strong id="sizeModeText">-</strong></div>
+        <div><span>Sticker Dimensions</span><strong id="stickerDimensionsText">-</strong></div>
+        <div><span>Orientation Used</span><strong id="orientationUsed">-</strong></div>
         <div><span>Print Sheets Needed</span><strong id="sheetsNeeded">0</strong></div>
         <div><span>Costing Mode</span><strong id="costingModeText">-</strong></div>
         <div><span>Costing Qty / Sheet</span><strong id="costingQtyPerSheet">0</strong></div>
@@ -337,7 +382,8 @@
   const csrfToken = '{{ csrf_token }}';
 
   const ids = [
-    'orderName', 'customerName', 'quantity', 'stickerSize', 'platform',
+    'orderName', 'customerName', 'quantity', 'sizeMode', 'stickerSize',
+    'customWidth', 'customHeight', 'customName', 'paperSizeId', 'saveCustomSize', 'platform',
     'paymentMethod', 'orderStatus', 'cricutCut',
     'materialId', 'laminationId', 'packagingId', 'otherMaterialId', 'packagingCapacity',
     'inkCostPerSheet', 'laborMinutes', 'additionalDirectCost',
@@ -379,6 +425,22 @@
     return Number.isFinite(capacity) && capacity > 0 ? capacity : 1;
   }
 
+  function getSizeMode() {
+    return value('sizeMode') || 'preset';
+  }
+
+  function getSelectedPaperOption() {
+    const select = document.getElementById('paperSizeId');
+    if (!select || select.selectedIndex < 0) return null;
+    return select.options[select.selectedIndex];
+  }
+
+  function syncSizeMode() {
+    const isCustom = getSizeMode() === 'custom';
+    document.getElementById('presetSizeWrap')?.classList.toggle('d-none', isCustom);
+    document.getElementById('customSizeWrap')?.classList.toggle('d-none', !isCustom);
+  }
+
   function syncPackagingCapacity() {
     const packagingSelect = document.getElementById('packagingId');
     const capacityInput = document.getElementById('packagingCapacity');
@@ -410,6 +472,9 @@
     zeroMoneyFields.forEach(id => money(id, 0));
 
     text('selectedSizeText', message || '-');
+    text('sizeModeText', '-');
+    text('stickerDimensionsText', '-');
+    text('orientationUsed', '-');
     text('sheetsNeeded', '0');
     text('costingModeText', '-');
     text('costingQtyPerSheet', '0');
@@ -469,6 +534,9 @@
 
     text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
     text('selectedSizeText', result.sticker_size || getSelectedText('stickerSize') || '-');
+    text('sizeModeText', result.size_mode || (getSizeMode() === 'custom' ? 'Custom Size' : 'Preset Size'));
+    text('stickerDimensionsText', `${result.sticker_width_in || 0} x ${result.sticker_height_in || 0} in`);
+    text('orientationUsed', result.orientation_used || '-');
     text('sheetsNeeded', result.sheets_needed || 0);
     text('costingModeText', result.costing_mode || (document.getElementById('cricutCut')?.checked ? 'Cricut cut' : 'Full sheet / print only'));
     text('costingQtyPerSheet', result.costing_qty_per_sheet || 0);
@@ -492,6 +560,9 @@
       costingMode: result.costing_mode || (document.getElementById('cricutCut')?.checked ? 'Cricut cut' : 'Full sheet / print only'),
       costingQtyPerSheet: result.costing_qty_per_sheet || 0,
       sheetsNeeded: result.sheets_needed || 0,
+      sizeMode: result.size_mode || (getSizeMode() === 'custom' ? 'Custom Size' : 'Preset Size'),
+      stickerDimensions: `${result.sticker_width_in || 0} x ${result.sticker_height_in || 0} in`,
+      orientationUsed: result.orientation_used || '-',
       materials,
       labor,
       overhead,
@@ -519,23 +590,36 @@
   }
 
   async function calculateSimpleCosting() {
-    const stickerSizeId = value('stickerSize');
+    syncSizeMode();
+    const isCustom = getSizeMode() === 'custom';
+    const stickerSizeId = isCustom ? 'custom' : value('stickerSize');
     const quantity = parseInt(value('quantity') || '0', 10);
 
-    if (!stickerSizeId || quantity <= 0) {
+    if ((!stickerSizeId || stickerSizeId === 'custom' && (!value('customWidth') || !value('customHeight'))) || quantity <= 0) {
       updateEmptyState('Select size and quantity');
       return;
     }
 
+    const paperOption = getSelectedPaperOption();
+    const useCricut = document.getElementById('cricutCut')?.checked;
+
     const payload = {
+      size_mode: isCustom ? 'custom' : 'preset',
       sticker_size_id: stickerSizeId,
+      custom_width: value('customWidth') || '',
+      custom_height: value('customHeight') || '',
+      custom_name: value('customName') || '',
+      save_custom_size: document.getElementById('saveCustomSize')?.checked ? '1' : '',
+      paper_size_id: value('paperSizeId') || '',
+      printable_width: paperOption ? (useCricut ? paperOption.dataset.cricutWidth : paperOption.dataset.width) : '',
+      printable_height: paperOption ? (useCricut ? paperOption.dataset.cricutHeight : paperOption.dataset.height) : '',
       quantity: quantity,
       material_id: value('materialId') || '',
       lamination_id: value('laminationId') || '',
       packaging_id: value('packagingId') || '',
       other_material_id: value('otherMaterialId') || '',
       packaging_capacity: getPackagingCapacity(),
-      use_cricut_cut: document.getElementById('cricutCut')?.checked ? '1' : '0',
+      use_cricut_cut: useCricut ? '1' : '0',
       ink_cost_per_sheet: value('inkCostPerSheet') || 0,
       labor_minutes: value('laborMinutes') || 0,
       additional_direct_cost: value('additionalDirectCost') || 0,
@@ -576,7 +660,13 @@
 
     return {
       product_name: value('orderName') || 'Simple Costing Item',
-      sticker_size_id: value('stickerSize'),
+      sticker_size_id: getSizeMode() === 'custom' ? 'custom' : value('stickerSize'),
+      size_mode: getSizeMode() === 'custom' ? 'custom' : 'preset',
+      custom_width: value('customWidth') || '',
+      custom_height: value('customHeight') || '',
+      custom_name: value('customName') || '',
+      save_custom_size: document.getElementById('saveCustomSize')?.checked ? '1' : '',
+      paper_size_id: value('paperSizeId') || '',
       sticker_size: summary.size || getSelectedText('stickerSize'),
       quantity: Number(value('quantity') || 0),
       material_id: value('materialId') || '',
@@ -687,6 +777,12 @@
       status: value('orderStatus') || 'Pending',
 
       sticker_size_id: firstItem.sticker_size_id,
+      size_mode: firstItem.size_mode,
+      custom_width: firstItem.custom_width,
+      custom_height: firstItem.custom_height,
+      custom_name: firstItem.custom_name,
+      save_custom_size: firstItem.save_custom_size,
+      paper_size_id: firstItem.paper_size_id,
       quantity: firstItem.quantity,
       material_id: firstItem.material_id,
       lamination_id: firstItem.lamination_id,
@@ -738,6 +834,9 @@
       `Customer: ${summary.customerName || '-'}`,
       `Order: ${summary.orderName || '-'}`,
       `Size: ${summary.size || '-'}`,
+      `Size Mode: ${summary.sizeMode || '-'}`,
+      `Sticker Dimensions: ${summary.stickerDimensions || '-'}`,
+      `Orientation Used: ${summary.orientationUsed || '-'}`,
       `Quantity: ${summary.quantity || 0}`,
       `Paper: ${summary.paper || '-'}`,
       `Photo Top / Lamination: ${summary.lamination || 'None'}`,
@@ -792,6 +891,7 @@
   });
 
   syncPackagingCapacity();
+  syncSizeMode();
   updateEmptyState('Select size and quantity');
   renderSimpleOrderItems();
   scheduleCalculation();
