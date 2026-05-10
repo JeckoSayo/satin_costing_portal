@@ -33,6 +33,20 @@
                 Delete Selected
             </button>
         </div>
+
+        <a href="{% url 'material_export_excel' %}" class="btn btn-success">
+    <i class="bi bi-file-earmark-excel me-1"></i>
+    Export Excel
+</a>
+
+<form method="post" action="{% url 'material_import_excel' %}" enctype="multipart/form-data" class="d-inline">
+    {% csrf_token %}
+    <input type="file" name="excel_file" accept=".xlsx" required class="form-control d-inline-block" style="width: 260px;">
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-upload me-1"></i>
+        Import Excel
+    </button>
+</form>
     </div>
 
     <div class="materials-table-card">

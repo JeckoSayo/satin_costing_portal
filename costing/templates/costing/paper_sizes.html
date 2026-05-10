@@ -12,10 +12,26 @@
             </p>
         </div>
 
-        <a href="{% url 'paper_size_add' %}" class="btn papers-add-btn">
-            <i class="bi bi-plus-circle me-1"></i>
-            Add Paper
-        </a>
+        <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'paper_size_export_excel' %}" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel me-1"></i>
+        Export Excel
+    </a>
+
+    <form method="post" action="{% url 'paper_size_import_excel' %}" enctype="multipart/form-data" class="d-flex gap-2">
+        {% csrf_token %}
+        <input type="file" name="excel_file" accept=".xlsx" required class="form-control" style="width: 260px;">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload me-1"></i>
+            Import Excel
+        </button>
+    </form>
+
+    <a href="{% url 'paper_size_add' %}" class="btn papers-add-btn">
+        <i class="bi bi-plus-circle me-1"></i>
+        Add Paper
+    </a>
+</div>
     </div>
 
     <div class="papers-table-card">

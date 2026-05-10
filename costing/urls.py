@@ -1,9 +1,11 @@
 from django.urls import path
 from .views import (
     DashboardView, FullQuoteCalculatorView, SimpleCostingCalculatorView, CalculateQuoteView, LogSaleView,
-    MaterialListView, MaterialCreateView, MaterialUpdateView, MaterialDeleteView, BulkMaterialDeleteView,
+MaterialListView, MaterialCreateView, MaterialUpdateView, MaterialDeleteView, BulkMaterialDeleteView,
+MaterialExportExcelView, MaterialImportExcelView,
     StickerSizeListView, StickerSizeCreateView, StickerSizeUpdateView, StickerSizeDeleteView,
-    PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
+PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
+PaperSizeExportExcelView, PaperSizeImportExcelView,
     PriceSettingsView, SalesLogView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
     SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
 )
@@ -41,6 +43,8 @@ urlpatterns = [
     path('materials/<int:pk>/edit/', MaterialUpdateView.as_view(), name='material_edit'),
     path('materials/<int:pk>/delete/', MaterialDeleteView.as_view(), name='material_delete'),
     path('materials/bulk-delete/', BulkMaterialDeleteView.as_view(), name='material_bulk_delete'),
+    path('materials/export-excel/', MaterialExportExcelView.as_view(), name='material_export_excel'),
+    path('materials/import-excel/', MaterialImportExcelView.as_view(), name='material_import_excel'),
 
     path('sticker-sizes/', StickerSizeListView.as_view(), name='sticker_sizes'),
     path('sticker-sizes/add/', StickerSizeCreateView.as_view(), name='sticker_size_add'),
@@ -51,6 +55,8 @@ urlpatterns = [
     path('paper-sizes/add/', PaperSizeCreateView.as_view(), name='paper_size_add'),
     path('paper-sizes/<int:pk>/edit/', PaperSizeUpdateView.as_view(), name='paper_size_edit'),
     path('paper-sizes/<int:pk>/delete/', PaperSizeDeleteView.as_view(), name='paper_size_delete'),
+    path('paper-sizes/export-excel/', PaperSizeExportExcelView.as_view(), name='paper_size_export_excel'),
+    path('paper-sizes/import-excel/', PaperSizeImportExcelView.as_view(), name='paper_size_import_excel'),
 
     path('settings/', PriceSettingsView.as_view(), name='price_settings'),
     path('products/', ProductCatalogView.as_view(), name='product_catalog'),

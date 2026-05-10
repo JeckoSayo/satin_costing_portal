@@ -1,7 +1,9 @@
 import json
 from decimal import Decimal
+from openpyxl import Workbook, load_workbook
+
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse_lazy
 from django.views import View
@@ -55,6 +57,12 @@ from .services import calculate_quote, create_sale_from_order_items, reverse_sal
 from django.db.models import Sum, F, Count, Q, Max
 from django.utils import timezone
 from datetime import timedelta
+
+
+def clean_bool(value):
+    if value in [True, "TRUE", "True", "true", "Yes", "yes", "1", 1]:
+        return True
+    return False
 
 
 
@@ -406,6 +414,109 @@ class BulkMaterialDeleteView(View):
             messages.warning(request, 'No materials selected.')
         return redirect('materials')
 
+class MaterialExportExcelView(View):
+    def get(self, request, *args, **kwargs):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Materials"
+
+        headers = [
+            "category",
+            "item_name",
+            "pack_price",
+            "pack_qty",
+            "stock_qty",
+            "unit",
+            "costing_basis",
+            "reorder_level",
+            "sku",
+            "supplier",
+            "use_type",
+            "packaging_capacity",
+            "is_active",
+            "notes",
+        ]
+        ws.append(headers)
+
+        for material in Material.objects.all():
+            ws.append([
+                material.category,
+                material.item_name,
+                material.pack_price,
+                material.pack_qty,
+                material.stock_qty,
+                material.unit,
+                material.costing_basis,
+                material.reorder_level,
+                material.sku,
+                material.supplier,
+                material.use_type,
+                material.packaging_capacity,
+                material.is_active,
+                material.notes,
+            ])
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="materials_master.xlsx"'
+        wb.save(response)
+        return response
+
+
+class MaterialImportExcelView(View):
+    def post(self, request, *args, **kwargs):
+        excel_file = request.FILES.get("excel_file")
+
+        if not excel_file:
+            messages.error(request, "Please select an Excel file.")
+            return redirect("materials")
+
+        wb = load_workbook(excel_file)
+        ws = wb.active
+
+        headers = [cell.value for cell in ws[1]]
+        created_count = 0
+        updated_count = 0
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            data = dict(zip(headers, row))
+
+            item_name = data.get("item_name")
+
+            if not item_name:
+                continue
+
+            material, created = Material.objects.update_or_create(
+                item_name=item_name,
+                defaults={
+                    "category": data.get("category") or Material.CATEGORY_OTHER,
+                    "pack_price": data.get("pack_price") or 0,
+                    "pack_qty": data.get("pack_qty") or 1,
+                    "stock_qty": data.get("stock_qty") or 0,
+                    "unit": data.get("unit") or "pcs",
+                    "costing_basis": data.get("costing_basis") or Material.BASIS_PER_SHEET,
+                    "reorder_level": data.get("reorder_level") or 0,
+                    "sku": data.get("sku") or "",
+                    "supplier": data.get("supplier") or "",
+                    "use_type": data.get("use_type") or Material.USE_DIRECT,
+                    "packaging_capacity": data.get("packaging_capacity") or 1,
+                    "is_active": clean_bool(data.get("is_active")),
+                    "notes": data.get("notes") or "",
+                }
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        messages.success(
+            request,
+            f"Import complete. Created: {created_count}, Updated: {updated_count}."
+        )
+        return redirect("materials")
+
 
 class StickerSizeListView(ListView):
     model = StickerSize
@@ -465,6 +576,82 @@ class PaperSizeDeleteView(DeleteView):
     model = PaperSize
     template_name = 'costing/paper_size_confirm_delete.html'
     success_url = reverse_lazy('paper_sizes')
+
+class PaperSizeExportExcelView(View):
+    def get(self, request, *args, **kwargs):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Paper Sizes"
+
+        headers = [
+            "name",
+            "width_in",
+            "height_in",
+            "use_cricut_safe_area",
+            "is_active",
+        ]
+        ws.append(headers)
+
+        for paper in PaperSize.objects.all():
+            ws.append([
+                paper.name,
+                paper.width_in,
+                paper.height_in,
+                paper.use_cricut_safe_area,
+                paper.is_active,
+            ])
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="paper_sizes.xlsx"'
+        wb.save(response)
+        return response
+
+
+class PaperSizeImportExcelView(View):
+    def post(self, request, *args, **kwargs):
+        excel_file = request.FILES.get("excel_file")
+
+        if not excel_file:
+            messages.error(request, "Please select an Excel file.")
+            return redirect("paper_sizes")
+
+        wb = load_workbook(excel_file)
+        ws = wb.active
+
+        headers = [cell.value for cell in ws[1]]
+        created_count = 0
+        updated_count = 0
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            data = dict(zip(headers, row))
+
+            name = data.get("name")
+
+            if not name:
+                continue
+
+            paper, created = PaperSize.objects.update_or_create(
+                name=name,
+                defaults={
+                    "width_in": data.get("width_in") or 0,
+                    "height_in": data.get("height_in") or 0,
+                    "use_cricut_safe_area": clean_bool(data.get("use_cricut_safe_area")),
+                    "is_active": clean_bool(data.get("is_active")),
+                }
+            )
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        messages.success(
+            request,
+            f"Import complete. Created: {created_count}, Updated: {updated_count}."
+        )
+        return redirect("paper_sizes")
 
 
 class SaleLogUpdateView(UpdateView):
