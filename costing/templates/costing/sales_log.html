@@ -14,22 +14,22 @@
   <div class="sales-stat-grid">
     <div class="sales-stat-card">
       <span>Total Orders</span>
-      <strong>{{ total_orders }}</strong>
+      <strong data-realtime="sales-total-orders">{{ total_orders }}</strong>
     </div>
 
     <div class="sales-stat-card">
       <span>Total Sales</span>
-      <strong>₱{{ total_sales|floatformat:2 }}</strong>
+      <strong data-realtime="sales-total-sales">₱{{ total_sales|floatformat:2 }}</strong>
     </div>
 
     <div class="sales-stat-card">
       <span>Total Cost</span>
-      <strong>₱{{ total_cost|floatformat:2 }}</strong>
+      <strong data-realtime="sales-total-cost">₱{{ total_cost|floatformat:2 }}</strong>
     </div>
 
     <div class="sales-stat-card">
       <span>Total Profit</span>
-      <strong>₱{{ total_profit|floatformat:2 }}</strong>
+      <strong data-realtime="sales-total-profit">₱{{ total_profit|floatformat:2 }}</strong>
     </div>
   </div>
 

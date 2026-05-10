@@ -259,7 +259,7 @@ const revenueData = {{ chart_revenue|safe }};
 const costData = {{ chart_cost|safe }};
 const profitData = {{ chart_profit|safe }};
 
-new Chart(document.getElementById('revenueProfitChart'), {
+window.revenueProfitChart = new Chart(document.getElementById('revenueProfitChart'), {
   type: 'line',
   data: {
     labels: chartLabels,

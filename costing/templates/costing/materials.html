@@ -57,10 +57,10 @@
                     </tr>
                 </thead>
 
-                <tbody>
+                <tbody data-realtime-materials>
 
                 {% for material in materials %}
-                    <tr>
+                    <tr data-material-id="{{ material.id }}">
 
                         <td>
                             <input
@@ -87,8 +87,9 @@
                         <td>{{ material.pack_qty|floatformat:0 }}</td>
 
                         <td>
-                            <strong>{{ material.stock_qty|floatformat:0 }}</strong>
+                            <strong data-material-stock>{{ material.stock_qty|floatformat:0 }}</strong>
 
+                            <div data-material-stock-status>
                             {% if material.stock_qty <= 0 %}
                                 <div>
                                     <span class="materials-badge red">
@@ -103,11 +104,12 @@
                                     </span>
                                 </div>
                             {% endif %}
+                            </div>
                         </td>
 
                         <td>{{ material.unit }}</td>
 
-                        <td>₱{{ material.unit_cost|floatformat:2 }}</td>
+                        <td data-material-unit-cost>₱{{ material.unit_cost|floatformat:2 }}</td>
 
                         <td>
                             {% if material.is_active %}

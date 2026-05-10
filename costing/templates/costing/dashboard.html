@@ -17,32 +17,32 @@
   <div class="v42-kpi-grid">
     <a href="{% url 'sales_log' %}" class="v42-kpi-card kpi-blue">
       <span>Sales Today</span>
-      <strong>₱{{ today_revenue|floatformat:2 }}</strong>
-      <small>{{ today_orders }} order{{ today_orders|pluralize }}</small>
+      <strong data-realtime="today-revenue">₱{{ today_revenue|floatformat:2 }}</strong>
+      <small><span data-realtime="today-orders">{{ today_orders }}</span> order{{ today_orders|pluralize }}</small>
     </a>
     <a href="{% url 'analytics_dashboard' %}" class="v42-kpi-card kpi-pink">
       <span>Profit Today</span>
-      <strong>₱{{ today_profit|floatformat:2 }}</strong>
+      <strong data-realtime="today-profit">₱{{ today_profit|floatformat:2 }}</strong>
       <small>after logged costs</small>
     </a>
     <a href="{% url 'order_queue' %}?due=today" class="v42-kpi-card kpi-yellow">
       <span>Due Today</span>
-      <strong>{{ due_today_count }}</strong>
+      <strong data-realtime="due-today-count">{{ due_today_count }}</strong>
       <small>unfinished jobs</small>
     </a>
     <a href="{% url 'order_queue' %}?due=ready" class="v42-kpi-card kpi-green">
       <span>Ready Jobs</span>
-      <strong>{{ ready_count }}</strong>
+      <strong data-realtime="ready-count">{{ ready_count }}</strong>
       <small>ready for release</small>
     </a>
     <a href="{% url 'cashflow' %}" class="v42-kpi-card kpi-purple">
       <span>Unpaid Balance</span>
-      <strong>₱{{ unpaid_balance|floatformat:2 }}</strong>
+      <strong data-realtime="unpaid-balance">₱{{ unpaid_balance|floatformat:2 }}</strong>
       <small>collectables</small>
     </a>
     <a href="{% url 'materials' %}" class="v42-kpi-card kpi-orange">
       <span>Low Stock</span>
-      <strong>{{ low_stock_count }}</strong>
+      <strong data-realtime="low-stock-count">{{ low_stock_count }}</strong>
       <small>needs review</small>
     </a>
   </div>
@@ -83,22 +83,22 @@
         <a href="{% url 'order_queue' %}?due=today">
           <i class="bi bi-calendar-event"></i>
           <span>Orders due today</span>
-          <strong>{{ due_today_count }}</strong>
+          <strong data-realtime="due-today-count">{{ due_today_count }}</strong>
         </a>
         <a href="{% url 'order_queue' %}?due=ready">
           <i class="bi bi-bag-check"></i>
           <span>Ready for pickup/release</span>
-          <strong>{{ ready_count }}</strong>
+          <strong data-realtime="ready-count">{{ ready_count }}</strong>
         </a>
         <a href="{% url 'cashflow' %}">
           <i class="bi bi-wallet2"></i>
           <span>Unpaid customer balance</span>
-          <strong>₱{{ unpaid_balance|floatformat:2 }}</strong>
+          <strong data-realtime="unpaid-balance">₱{{ unpaid_balance|floatformat:2 }}</strong>
         </a>
         <a href="{% url 'materials' %}">
           <i class="bi bi-exclamation-triangle"></i>
           <span>Low-stock materials</span>
-          <strong>{{ low_stock_count }}</strong>
+          <strong data-realtime="low-stock-count">{{ low_stock_count }}</strong>
         </a>
       </div>
     </div>
@@ -112,7 +112,7 @@
         <a href="{% url 'stock_purchases' %}" class="btn btn-sm btn-outline-primary rounded-pill">Stock in</a>
       </div>
       {% if low_stock_materials %}
-        <div class="figma-metric-list compact-list">
+        <div class="figma-metric-list compact-list" data-realtime-low-stock-list>
           {% for material in low_stock_materials %}
             <div><span>{{ material.item_name|truncatechars:30 }}</span><strong>{{ material.stock_qty|floatformat:2 }} {{ material.unit }}</strong></div>
           {% endfor %}
@@ -135,7 +135,7 @@
       <div class="table-responsive">
         <table class="table align-middle v42-mini-table">
           <thead><tr><th>Customer</th><th>Order</th><th class="text-end">Total</th><th>Status</th></tr></thead>
-          <tbody>
+          <tbody data-realtime-recent-sales>
             {% for sale in recent_sales %}
               <tr>
                 <td>{{ sale.customer_name|default:"Walk-in"|truncatechars:20 }}</td>

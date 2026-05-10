@@ -821,3 +821,207 @@ def create_smart_paste_inquiry(raw_message):
         confidence_score=parsed.get("confidence_score") or 0,
     )
     return inquiry, parsed
+
+
+# -----------------------------
+# Real-time WebSocket helpers
+# -----------------------------
+REALTIME_DASHBOARD_GROUP = "costing.dashboard"
+REALTIME_NOTIFICATION_GROUP = "costing.notifications"
+REALTIME_INVENTORY_GROUP = "costing.inventory"
+REALTIME_SALES_GROUP = "costing.sales"
+
+
+def _channel_layer():
+    from channels.layers import get_channel_layer
+
+    return get_channel_layer()
+
+
+def _send_group(group_name, payload):
+    from asgiref.sync import async_to_sync
+
+    channel_layer = _channel_layer()
+    if not channel_layer:
+        return
+
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            "type": "send_json_event",
+            "payload": payload,
+        },
+    )
+
+
+def _decimal_to_float(value):
+    return float(value or 0)
+
+
+def serialize_material(material):
+    return {
+        "id": material.id,
+        "category": material.category,
+        "item_name": material.item_name,
+        "pack_price": _decimal_to_float(material.pack_price),
+        "pack_qty": _decimal_to_float(material.pack_qty),
+        "stock_qty": _decimal_to_float(material.stock_qty),
+        "unit": material.unit,
+        "unit_cost": _decimal_to_float(material.unit_cost),
+        "reorder_level": _decimal_to_float(material.reorder_level),
+        "is_active": material.is_active,
+        "is_low_stock": material.is_low_stock,
+    }
+
+
+def serialize_sale(sale):
+    return {
+        "id": sale.id,
+        "created_at": sale.created_at.strftime("%m/%d/%y %H:%M") if sale.created_at else "",
+        "receipt_number": sale.receipt_number or "-",
+        "platform": sale.platform or "Walk-in",
+        "customer_name": sale.customer_name or "",
+        "order_name": sale.order_name or "",
+        "item_count": sale.item_count,
+        "total_quantity": sale.total_quantity,
+        "total_collected": _decimal_to_float(sale.total_collected),
+        "selling_price": _decimal_to_float(sale.selling_price),
+        "cost": _decimal_to_float(sale.cost),
+        "profit": _decimal_to_float(sale.profit),
+        "payment_method": sale.payment_method,
+        "status": sale.status,
+        "job_status": sale.job_status,
+        "balance_amount": _decimal_to_float(sale.balance_amount),
+        "due_date": sale.due_date.isoformat() if sale.due_date else "",
+        "is_overdue": sale.is_overdue,
+        "rush_order": sale.rush_order,
+    }
+
+
+def get_dashboard_realtime_payload():
+    from django.db.models import Count, F, Sum
+    from django.utils import timezone
+    from datetime import timedelta
+
+    today = timezone.localdate()
+    start_7 = today - timedelta(days=6)
+    today_sales = SaleLog.objects.filter(created_at__date=today)
+    low_stock_qs = Material.objects.filter(
+        is_active=True,
+        reorder_level__gt=0,
+        stock_qty__lte=F("reorder_level"),
+    ).order_by("stock_qty", "item_name")
+
+    day_labels, revenue_series, cost_series, profit_series = [], [], [], []
+    for i in range(7):
+        day = start_7 + timedelta(days=i)
+        day_sales = SaleLog.objects.filter(created_at__date=day)
+        day_labels.append(day.strftime("%b %d"))
+        revenue_series.append(_decimal_to_float(day_sales.aggregate(total=Sum("selling_price"))["total"]))
+        cost_series.append(_decimal_to_float(day_sales.aggregate(total=Sum("cost"))["total"]))
+        profit_series.append(_decimal_to_float(day_sales.aggregate(total=Sum("profit"))["total"]))
+
+    return {
+        "today_revenue": _decimal_to_float(today_sales.aggregate(total=Sum("selling_price"))["total"]),
+        "today_profit": _decimal_to_float(today_sales.aggregate(total=Sum("profit"))["total"]),
+        "today_orders": today_sales.count(),
+        "due_today_count": SaleLog.objects.filter(due_date=today).exclude(job_status=SaleLog.JOB_RELEASED).count(),
+        "ready_count": SaleLog.objects.filter(job_status=SaleLog.JOB_READY).count(),
+        "unpaid_balance": _decimal_to_float(SaleLog.objects.aggregate(total=Sum("balance_amount"))["total"]),
+        "low_stock_count": low_stock_qs.count(),
+        "low_stock_materials": [serialize_material(material) for material in low_stock_qs[:8]],
+        "recent_sales": [serialize_sale(sale) for sale in SaleLog.objects.all()[:8]],
+        "top_repeat_customers": list(
+            SaleLog.objects.exclude(customer_name="")
+            .values("customer_name")
+            .annotate(order_count=Count("id"), total_spent=Sum("selling_price"))
+            .order_by("-order_count", "-total_spent")[:6]
+        ),
+        "charts": {
+            "labels": day_labels,
+            "revenue": revenue_series,
+            "cost": cost_series,
+            "profit": profit_series,
+        },
+    }
+
+
+def get_inventory_realtime_payload(material=None):
+    from django.db.models import F
+
+    materials = Material.objects.order_by("category", "item_name")
+    low_stock_count = Material.objects.filter(
+        is_active=True,
+        reorder_level__gt=0,
+        stock_qty__lte=F("reorder_level"),
+    ).count()
+
+    payload = {
+        "low_stock_count": low_stock_count,
+        "materials": [serialize_material(item) for item in materials],
+    }
+    if material:
+        material.refresh_from_db()
+        payload["material"] = serialize_material(material)
+    return payload
+
+
+def get_sales_realtime_payload():
+    from django.db.models import Sum
+
+    qs = SaleLog.objects.all()
+    return {
+        "total_sales": _decimal_to_float(qs.aggregate(total=Sum("selling_price"))["total"]),
+        "total_cost": _decimal_to_float(qs.aggregate(total=Sum("cost"))["total"]),
+        "total_profit": _decimal_to_float(qs.aggregate(total=Sum("profit"))["total"]),
+        "total_orders": qs.count(),
+        "recent_sales": [serialize_sale(sale) for sale in qs[:25]],
+    }
+
+
+def broadcast_dashboard_update():
+    _send_group(
+        REALTIME_DASHBOARD_GROUP,
+        {
+            "type": "dashboard.update",
+            "payload": get_dashboard_realtime_payload(),
+        },
+    )
+
+
+def broadcast_notification(title, message, level="info", event="notification"):
+    from django.utils import timezone
+
+    _send_group(
+        REALTIME_NOTIFICATION_GROUP,
+        {
+            "type": "notification",
+            "payload": {
+                "event": event,
+                "title": title,
+                "message": message,
+                "level": level,
+                "created_at": timezone.localtime().isoformat(),
+            },
+        },
+    )
+
+
+def broadcast_inventory_update(material=None):
+    _send_group(
+        REALTIME_INVENTORY_GROUP,
+        {
+            "type": "inventory.update",
+            "payload": get_inventory_realtime_payload(material=material),
+        },
+    )
+
+
+def broadcast_sales_update():
+    _send_group(
+        REALTIME_SALES_GROUP,
+        {
+            "type": "sales.update",
+            "payload": get_sales_realtime_payload(),
+        },
+    )

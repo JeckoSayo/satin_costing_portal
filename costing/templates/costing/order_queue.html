@@ -7,9 +7,9 @@
   </div>
 
   <div class="sales-stat-grid">
-    <div class="sales-stat-card"><span>Due Today</span><strong>{{ due_today }}</strong></div>
+    <div class="sales-stat-card"><span>Due Today</span><strong data-realtime="due-today-count">{{ due_today }}</strong></div>
     <div class="sales-stat-card"><span>Overdue</span><strong>{{ overdue }}</strong></div>
-    <div class="sales-stat-card"><span>Ready</span><strong>{{ ready }}</strong></div>
+    <div class="sales-stat-card"><span>Ready</span><strong data-realtime="ready-count">{{ ready }}</strong></div>
     <div class="sales-stat-card"><span>Shown</span><strong>{{ orders|length }}</strong></div>
   </div>
 
