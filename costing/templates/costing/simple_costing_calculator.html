@@ -201,7 +201,7 @@
             <option value="">None</option>
             {% for material in other_materials %}
               <option value="{{ material.id }}" data-cost="{{ material.unit_cost|floatformat:4 }}" data-unit="{{ material.unit }}" data-stock="{{ material.stock_qty }}" data-basis="{{ material.costing_basis }}">
-                {{ material.item_name }} â€” â‚±{{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
+               {{ material.item_name }} - PHP {{ material.unit_cost|floatformat:2 }}/{{ material.unit }}
               </option>
             {% endfor %}
           </select>

@@ -83,12 +83,51 @@
         <div>
           <label class="form-label" for="{{ form.costing_basis.id_for_label }}">Costing Basis</label>
           {{ form.costing_basis }}
+          <div class="mt-2">
+    <a class="small text-primary text-decoration-none"
+       data-bs-toggle="collapse"
+       href="#costingBasisHelp"
+       role="button"
+       aria-expanded="false"
+       aria-controls="costingBasisHelp">
+        <i class="fas fa-info-circle me-1"></i>
+        What is Costing Basis?
+    </a>
+
+    <div class="collapse mt-2" id="costingBasisHelp">
+        <div class="card card-body bg-light border small">
+            <p class="mb-2">
+                Costing Basis determines how this material is charged during costing.
+            </p>
+
+            <strong>Per Print Sheet</strong><br>
+            Sheets Needed × Unit Cost<br>
+            <span class="text-muted">
+                Example: Sticker paper, lamination sheets, 3R/4R photo paper.
+            </span>
+
+            <hr class="my-2">
+
+            <strong>Per Piece</strong><br>
+            Quantity Ordered × Unit Cost<br>
+            <span class="text-muted">
+                Example: Ready-cut magnets, backing cards, sleeves.
+            </span>
+
+            <hr class="my-2">
+
+            <strong>Per Order</strong><br>
+            1 × Unit Cost<br>
+            <span class="text-muted">
+                Example: Design fee, setup fee, rush fee.
+            </span>
+        </div>
+    </div>
+</div>
           {% if form.costing_basis.errors %}
             <div class="field-error">{{ form.costing_basis.errors }}</div>
           {% endif %}
-          <small class="text-muted d-block mt-1">
-            Used by Other Direct Material: per sheet, per piece, or once per order.
-          </small>
+
         </div>
 
         <div>

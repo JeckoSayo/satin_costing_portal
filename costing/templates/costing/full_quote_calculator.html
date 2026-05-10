@@ -421,7 +421,7 @@
                   <option value="0">None</option>
                   {% for material in other_materials %}
                     <option value="{{ material.unit_cost }}" data-id="{{ material.id }}" data-stock="{{ material.stock_qty }}" data-basis="{{ material.costing_basis }}" data-unit="{{ material.unit }}">
-                      {{ material.item_name }} â€” Stock: {{ material.stock_qty }} {{ material.unit }}
+                      {{ material.item_name }} - Stock: {{ material.stock_qty }} {{ material.unit }}
                     </option>
                   {% endfor %}
                 </select>
@@ -670,7 +670,7 @@
                 <td>Other Direct Material</td>
                 <td class="text-end" id="otherMaterialQty">0</td>
                 <td id="otherMaterialUnit">sheet</td>
-                <td class="text-end" id="otherMaterialTotal">â‚±0.00</td>
+                <td class="text-end" id="otherMaterialTotal">PHP 0.00</td>
               </tr>
 
               <tr>
