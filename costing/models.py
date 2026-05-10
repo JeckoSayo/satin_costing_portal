@@ -64,12 +64,7 @@ class StickerSize(models.Model):
             * int((paper_h / self.height_in).to_integral_value(rounding=ROUND_FLOOR))
         )
 
-        rotated = (
-            int((paper_w / self.height_in).to_integral_value(rounding=ROUND_FLOOR))
-            * int((paper_h / self.width_in).to_integral_value(rounding=ROUND_FLOOR))
-        )
-
-        return max(normal, rotated)
+        return normal
 
     @property
     def safe_fit(self):
