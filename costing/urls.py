@@ -3,10 +3,10 @@ from .views import (
     DashboardView, FullQuoteCalculatorView, SimpleCostingCalculatorView, CalculateQuoteView, LogSaleView,
 MaterialListView, MaterialCreateView, MaterialUpdateView, MaterialDeleteView, BulkMaterialDeleteView,
 MaterialExportExcelView, MaterialImportExcelView,
-    StickerSizeListView, StickerSizeCreateView, StickerSizeUpdateView, StickerSizeDeleteView,
+    StickerSizeListView, StickerSizeCreateView, StickerSizeUpdateView, StickerSizeDeleteView, BulkStickerSizeDeleteView,
 PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
 PaperSizeExportExcelView, PaperSizeImportExcelView,
-    PriceSettingsView, SalesLogView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
+    PriceSettingsView, SalesLogView, SalesLogExportExcelView, SalesLogImportExcelView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
     SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
 )
 
@@ -17,6 +17,8 @@ urlpatterns = [
     path('calculate-quote/', CalculateQuoteView.as_view(), name='calculate_quote'),
     path('log-sale/', LogSaleView.as_view(), name='log_sale'),
     path('sales/', SalesLogView.as_view(), name='sales_log'),
+    path('sales/export-excel/', SalesLogExportExcelView.as_view(), name='sales_export_excel'),
+    path('sales/import-excel/', SalesLogImportExcelView.as_view(), name='sales_import_excel'),
     path('queue/', OrderQueueView.as_view(), name='order_queue'),
     path('queue/<int:pk>/status/', UpdateJobStatusView.as_view(), name='update_job_status'),
     path('customers/<str:customer_name>/', CustomerHistoryView.as_view(), name='customer_history'),
@@ -50,6 +52,7 @@ urlpatterns = [
     path('sticker-sizes/add/', StickerSizeCreateView.as_view(), name='sticker_size_add'),
     path('sticker-sizes/<int:pk>/edit/', StickerSizeUpdateView.as_view(), name='sticker_size_edit'),
     path('sticker-sizes/<int:pk>/delete/', StickerSizeDeleteView.as_view(), name='sticker_size_delete'),
+    path('sticker-sizes/bulk-delete/', BulkStickerSizeDeleteView.as_view(), name='sticker_size_bulk_delete'),
 
     path('paper-sizes/', PaperSizeListView.as_view(), name='paper_sizes'),
     path('paper-sizes/add/', PaperSizeCreateView.as_view(), name='paper_size_add'),

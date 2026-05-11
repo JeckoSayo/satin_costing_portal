@@ -3037,7 +3037,204 @@ select{
     flex-direction:column;
     align-items:stretch !important;
   }
+}
 
+/* Master data import/export polish */
+.master-page-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  margin-bottom:28px;
+}
+
+.master-export-btn,
+.master-import-btn,
+.materials-add-btn,
+.materials-delete-btn,
+.papers-add-btn{
+  border-radius:8px !important;
+  min-height:42px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  white-space:nowrap;
+}
+
+.master-export-btn{
+  background:#087f68;
+  color:#fff;
+  border:1px solid #087f68;
+  padding:10px 16px;
+  font-weight:800;
+}
+
+.master-export-btn:hover{
+  background:#066b58;
+  color:#fff;
+  border-color:#066b58;
+}
+
+.master-import-btn{
+  background:#1769e8;
+  color:#fff;
+  border:1px solid #1769e8;
+  padding:10px 16px;
+  font-weight:800;
+}
+
+.master-import-btn:hover{
+  background:#0f57c7;
+  color:#fff;
+  border-color:#0f57c7;
+}
+
+.master-import-form{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+
+.master-file-picker{
+  height:42px;
+  min-width:210px;
+  max-width:300px;
+  padding:0 12px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  background:#fff;
+  color:#0f172a;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+  margin:0;
+  font-weight:700;
+}
+
+.master-file-picker span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.master-file-picker input{
+  width:1px;
+  height:1px;
+  opacity:0;
+  position:absolute;
+  pointer-events:none;
+}
+
+.master-file-picker:hover{
+  border-color:#60a5fa;
+  box-shadow:0 0 0 3px rgba(96,165,250,.16);
+}
+
+.master-table-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:18px;
+}
+
+.master-table-head.compact{
+  margin-bottom:14px;
+}
+
+.master-table-head h2{
+  margin:0;
+  color:#14345c;
+  font-size:20px;
+  line-height:1.2;
+  font-weight:900;
+}
+
+.master-table-head p{
+  margin:5px 0 0;
+  color:#64748b;
+  font-size:14px;
+  line-height:1.4;
+}
+
+.master-count-pill{
+  flex-shrink:0;
+  display:inline-flex;
+  align-items:center;
+  min-height:32px;
+  padding:6px 12px;
+  border-radius:999px;
+  background:#eef7ff;
+  color:#0f5ea8;
+  font-weight:900;
+  font-size:13px;
+}
+
+.materials-table-card,
+.papers-table-card,
+.sales-table-card,
+.sales-filter-card,
+.sales-stat-card{
+  border-radius:8px !important;
+  border-color:#dce5ef !important;
+  box-shadow:0 12px 28px rgba(15,23,42,.06) !important;
+}
+
+.materials-table thead th,
+.papers-table thead th,
+.sales-table thead th{
+  background:#f3f7fb !important;
+}
+
+.materials-table tbody tr:hover,
+.papers-table tbody tr:hover,
+.sales-table tbody tr:hover{
+  background:#f8fbff !important;
+}
+
+@media(max-width:991.98px){
+  .master-page-head,
+  .materials-head,
+  .papers-head{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .master-import-form{
+    width:100%;
+  }
+
+  .master-file-picker{
+    flex:1;
+    max-width:none;
+  }
+}
+
+@media(max-width:576px){
+  .master-import-form,
+  .materials-actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .master-file-picker,
+  .master-export-btn,
+  .master-import-btn{
+    width:100%;
+    max-width:none;
+  }
+
+  .master-table-head{
+    flex-direction:column;
+  }
+}
+
+@media(max-width:576px){
   .pos-products-actions{
     width:100%;
     flex-direction:column;

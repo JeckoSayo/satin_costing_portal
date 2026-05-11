@@ -12,29 +12,41 @@
             </p>
         </div>
 
-        <div class="d-flex gap-2 flex-wrap">
-    <a href="{% url 'paper_size_export_excel' %}" class="btn btn-success">
-        <i class="bi bi-file-earmark-excel me-1"></i>
-        Export Excel
-    </a>
+        <div class="materials-actions">
+            <a href="{% url 'paper_size_export_excel' %}" class="btn master-export-btn">
+                <i class="bi bi-file-earmark-excel me-1"></i>
+                Export
+            </a>
 
-    <form method="post" action="{% url 'paper_size_import_excel' %}" enctype="multipart/form-data" class="d-flex gap-2">
-        {% csrf_token %}
-        <input type="file" name="excel_file" accept=".xlsx" required class="form-control" style="width: 260px;">
-        <button type="submit" class="btn btn-primary">
-            <i class="bi bi-upload me-1"></i>
-            Import Excel
-        </button>
-    </form>
+            <form method="post" action="{% url 'paper_size_import_excel' %}" enctype="multipart/form-data" class="master-import-form">
+                {% csrf_token %}
+                <label class="master-file-picker">
+                    <i class="bi bi-file-earmark-arrow-up"></i>
+                    <span data-file-label>Choose Excel</span>
+                    <input type="file" name="excel_file" accept=".xlsx" required>
+                </label>
+                <button type="submit" class="btn master-import-btn">
+                    <i class="bi bi-upload me-1"></i>
+                    Import
+                </button>
+            </form>
 
-    <a href="{% url 'paper_size_add' %}" class="btn papers-add-btn">
-        <i class="bi bi-plus-circle me-1"></i>
-        Add Paper
-    </a>
-</div>
+            <a href="{% url 'paper_size_add' %}" class="btn papers-add-btn">
+                <i class="bi bi-plus-circle me-1"></i>
+                Add Paper
+            </a>
+        </div>
     </div>
 
     <div class="papers-table-card">
+        <div class="master-table-head">
+            <div>
+                <h2>Paper Library</h2>
+                <p>Width and height drive the Cricut safe-area values used by costing screens.</p>
+            </div>
+            <span class="master-count-pill">{{ papers|length }} sizes</span>
+        </div>
+
         <div class="table-responsive">
             <table id="paperTable" class="table papers-table align-middle mb-0 w-100">
                 <thead>
@@ -87,12 +99,6 @@
                             </div>
                         </td>
                     </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center py-5 text-muted fw-bold">
-                            No paper sizes found.
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -125,6 +131,13 @@ $(document).ready(function () {
         columnDefs:[
             { targets:-1, orderable:false, searchable:false }
         ]
+    });
+});
+
+document.querySelectorAll(".master-file-picker input[type='file']").forEach(function(input) {
+    input.addEventListener("change", function() {
+        const label = input.closest(".master-file-picker").querySelector("[data-file-label]");
+        label.textContent = input.files && input.files.length ? input.files[0].name : "Choose Excel";
     });
 });
 </script>

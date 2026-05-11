@@ -12,17 +12,37 @@
             </p>
         </div>
 
-        <a href="{% url 'sticker_size_add' %}" class="btn sizes-add-btn">
-            <i class="bi bi-plus-lg me-1"></i>
-            Add Size
-        </a>
+        <div class="materials-actions">
+            <a href="{% url 'sticker_size_add' %}" class="btn sizes-add-btn">
+                <i class="bi bi-plus-lg me-1"></i>
+                Add Size
+            </a>
+
+            <button
+                type="button"
+                id="bulkDeleteSizeBtn"
+                class="btn materials-delete-btn"
+                disabled
+                data-bs-toggle="modal"
+                data-bs-target="#deleteSizesModal"
+            >
+                <i class="bi bi-trash3 me-1"></i>
+                Delete Selected
+            </button>
+        </div>
     </div>
+
+    <form id="bulkDeleteSizeForm" method="post" action="{% url 'sticker_size_bulk_delete' %}">
+    {% csrf_token %}
 
     <div class="sizes-table-card">
         <div class="table-responsive">
             <table id="sizesTable" class="table sizes-table align-middle mb-0 w-100">
                 <thead>
                     <tr>
+                        <th style="width:45px;">
+                            <input type="checkbox" id="selectAllSizes">
+                        </th>
                         <th>Sticker Size</th>
                         <th>Width</th>
                         <th>Height</th>
@@ -39,6 +59,14 @@
                 <tbody>
                     {% for row in sizes %}
                     <tr>
+                        <td>
+                            <input
+                                type="checkbox"
+                                class="size-checkbox"
+                                name="selected_sizes"
+                                value="{{ row.id }}"
+                            >
+                        </td>
                         <td class="fw-bold">{{ row.name }}</td>
                         <td>{{ row.width_in|floatformat:2 }} in</td>
                         <td>{{ row.height_in|floatformat:2 }} in</td>
@@ -69,18 +97,37 @@
                             </div>
                         </td>
                     </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="10" class="text-center py-5 text-muted fw-bold">
-                            No sticker sizes found.
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
+    </form>
+
+</div>
+
+<div class="modal fade" id="deleteSizesModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-trash3 me-2"></i>
+                    Delete Selected Sticker Sizes
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                Delete the selected sticker sizes? Sizes already used in saved product presets will be archived instead.
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteSizesBtn">Delete Now</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}
@@ -94,7 +141,7 @@ $(document).ready(function () {
         responsive: true,
         autoWidth: false,
         ordering: true,
-        order: [[0,'asc']],
+        order: [[1,'asc']],
         language:{
             search:"Search:",
             lengthMenu:"Show _MENU_ rows",
@@ -105,9 +152,45 @@ $(document).ready(function () {
             }
         },
         columnDefs:[
-            { targets:-1, orderable:false, searchable:false }
+            { targets:[0,-1], orderable:false, searchable:false }
         ]
     });
 });
+
+const selectAllSizes = document.getElementById("selectAllSizes");
+const sizeCheckboxes = document.querySelectorAll(".size-checkbox");
+const bulkDeleteSizeBtn = document.getElementById("bulkDeleteSizeBtn");
+const confirmDeleteSizesBtn = document.getElementById("confirmDeleteSizesBtn");
+const bulkDeleteSizeForm = document.getElementById("bulkDeleteSizeForm");
+
+function updateBulkSizeButton() {
+    const checkedCount = document.querySelectorAll(".size-checkbox:checked").length;
+    bulkDeleteSizeBtn.disabled = checkedCount === 0;
+}
+
+if (selectAllSizes) {
+    selectAllSizes.addEventListener("change", function () {
+        sizeCheckboxes.forEach(function (checkbox) {
+            checkbox.checked = selectAllSizes.checked;
+        });
+        updateBulkSizeButton();
+    });
+}
+
+sizeCheckboxes.forEach(function (checkbox) {
+    checkbox.addEventListener("change", function () {
+        const checkedCount = document.querySelectorAll(".size-checkbox:checked").length;
+        selectAllSizes.checked = sizeCheckboxes.length > 0 && checkedCount === sizeCheckboxes.length;
+        updateBulkSizeButton();
+    });
+});
+
+if (confirmDeleteSizesBtn) {
+    confirmDeleteSizesBtn.addEventListener("click", function () {
+        bulkDeleteSizeForm.submit();
+    });
+}
+
+updateBulkSizeButton();
 </script>
 {% endblock %}

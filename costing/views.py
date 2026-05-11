@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from openpyxl import Workbook, load_workbook
 
 from django.contrib import messages
@@ -15,6 +15,7 @@ from django.views.generic import (
     DeleteView,
     DetailView,
 )
+from django.db.models.deletion import ProtectedError
 from .forms import (
     MaterialForm,
     StickerSizeForm,
@@ -57,13 +58,84 @@ from .services import calculate_quote, create_sale_from_order_items, reverse_sal
 from django.db.models import Sum, F, Count, Q, Max
 from django.utils import timezone
 from datetime import timedelta
+from django.utils.dateparse import parse_date, parse_datetime
 
 
 def clean_bool(value):
-    if value in [True, "TRUE", "True", "true", "Yes", "yes", "1", 1]:
+    if value in [True, "TRUE", "True", "true", "Yes", "yes", "Y", "y", "1", 1]:
         return True
     return False
 
+
+def clean_decimal(value, default="0"):
+    if value in [None, ""]:
+        return Decimal(default)
+    try:
+        return Decimal(str(value).replace(",", "").replace("₱", "").strip())
+    except (InvalidOperation, ValueError, AttributeError):
+        return Decimal(default)
+
+
+def clean_int(value, default=0):
+    try:
+        return int(clean_decimal(value, default))
+    except (TypeError, ValueError, InvalidOperation):
+        return default
+
+
+def normalize_excel_headers(row):
+    return [
+        str(cell.value).strip().lower().replace(" ", "_") if cell.value is not None else ""
+        for cell in row
+    ]
+
+
+def open_import_workbook(request, redirect_name):
+    excel_file = request.FILES.get("excel_file")
+    if not excel_file:
+        messages.error(request, "Please select an Excel .xlsx file.")
+        return None, redirect(redirect_name)
+    if not excel_file.name.lower().endswith(".xlsx"):
+        messages.error(request, "Please upload an .xlsx Excel file.")
+        return None, redirect(redirect_name)
+    try:
+        return load_workbook(excel_file, data_only=True), None
+    except Exception:
+        messages.error(request, "Could not read that Excel file. Please export the template and try again.")
+        return None, redirect(redirect_name)
+
+
+def excel_response(workbook, filename):
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    workbook.save(response)
+    return response
+
+
+def clean_choice(value, choices, default):
+    valid = {choice[0] for choice in choices}
+    return value if value in valid else default
+
+
+def clean_import_datetime(value):
+    if not value:
+        return None
+    if hasattr(value, "date"):
+        dt = value
+    else:
+        text = str(value).strip()
+        dt = parse_datetime(text)
+        if dt is None:
+            date_value = parse_date(text)
+            if date_value:
+                dt = timezone.datetime.combine(date_value, timezone.datetime.min.time())
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
 
 
 class DashboardView(TemplateView):
@@ -399,17 +471,39 @@ class MaterialDeleteView(DeleteView):
     template_name = 'costing/material_confirm_delete.html'
     success_url = reverse_lazy('materials')
 
-    def form_valid(self, form):
-        messages.success(self.request, 'Material deleted successfully.')
-        return super().form_valid(form)
+    def post(self, request, *args, **kwargs):
+        material = self.get_object()
+        try:
+            material.delete()
+            messages.success(request, "Material deleted successfully.")
+        except ProtectedError:
+            material.is_active = False
+            material.save(update_fields=["is_active"])
+            messages.warning(
+                request,
+                "This material already has stock or sales history, so it was archived instead of deleted."
+            )
+        return redirect("materials")
 
 
 class BulkMaterialDeleteView(View):
     def post(self, request, *args, **kwargs):
         ids = request.POST.getlist('selected_materials')
         if ids:
-            Material.objects.filter(id__in=ids).delete()
-            messages.success(request, f'{len(ids)} material(s) deleted.')
+            deleted_count = 0
+            archived_count = 0
+            for material in Material.objects.filter(id__in=ids):
+                try:
+                    material.delete()
+                    deleted_count += 1
+                except ProtectedError:
+                    material.is_active = False
+                    material.save(update_fields=["is_active"])
+                    archived_count += 1
+            if deleted_count:
+                messages.success(request, f"{deleted_count} material(s) deleted.")
+            if archived_count:
+                messages.warning(request, f"{archived_count} material(s) had history and were archived instead.")
         else:
             messages.warning(request, 'No materials selected.')
         return redirect('materials')
@@ -437,8 +531,9 @@ class MaterialExportExcelView(View):
             "notes",
         ]
         ws.append(headers)
+        ws.freeze_panes = "A2"
 
-        for material in Material.objects.all():
+        for material in Material.objects.order_by("category", "item_name"):
             ws.append([
                 material.category,
                 material.item_name,
@@ -456,52 +551,49 @@ class MaterialExportExcelView(View):
                 material.notes,
             ])
 
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response["Content-Disposition"] = 'attachment; filename="materials_master.xlsx"'
-        wb.save(response)
-        return response
+        return excel_response(wb, "materials_master.xlsx")
 
 
 class MaterialImportExcelView(View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get("excel_file")
-
-        if not excel_file:
-            messages.error(request, "Please select an Excel file.")
-            return redirect("materials")
-
-        wb = load_workbook(excel_file)
+        wb, error_response = open_import_workbook(request, "materials")
+        if error_response:
+            return error_response
         ws = wb.active
 
-        headers = [cell.value for cell in ws[1]]
+        headers = normalize_excel_headers(ws[1])
+        required = {"item_name"}
+        if not required.issubset(set(headers)):
+            messages.error(request, "Import failed. The file needs an item_name column.")
+            return redirect("materials")
+
         created_count = 0
         updated_count = 0
+        skipped_count = 0
 
         for row in ws.iter_rows(min_row=2, values_only=True):
             data = dict(zip(headers, row))
-
             item_name = data.get("item_name")
 
             if not item_name:
+                skipped_count += 1
                 continue
 
             material, created = Material.objects.update_or_create(
-                item_name=item_name,
+                item_name=str(item_name).strip(),
                 defaults={
                     "category": data.get("category") or Material.CATEGORY_OTHER,
-                    "pack_price": data.get("pack_price") or 0,
-                    "pack_qty": data.get("pack_qty") or 1,
-                    "stock_qty": data.get("stock_qty") or 0,
+                    "pack_price": clean_decimal(data.get("pack_price")),
+                    "pack_qty": clean_decimal(data.get("pack_qty"), "1") or Decimal("1"),
+                    "stock_qty": clean_decimal(data.get("stock_qty")),
                     "unit": data.get("unit") or "pcs",
                     "costing_basis": data.get("costing_basis") or Material.BASIS_PER_SHEET,
-                    "reorder_level": data.get("reorder_level") or 0,
+                    "reorder_level": clean_decimal(data.get("reorder_level")),
                     "sku": data.get("sku") or "",
                     "supplier": data.get("supplier") or "",
                     "use_type": data.get("use_type") or Material.USE_DIRECT,
-                    "packaging_capacity": data.get("packaging_capacity") or 1,
-                    "is_active": clean_bool(data.get("is_active")),
+                    "packaging_capacity": clean_int(data.get("packaging_capacity"), 1) or 1,
+                    "is_active": True if data.get("is_active") in [None, ""] else clean_bool(data.get("is_active")),
                     "notes": data.get("notes") or "",
                 }
             )
@@ -513,7 +605,7 @@ class MaterialImportExcelView(View):
 
         messages.success(
             request,
-            f"Import complete. Created: {created_count}, Updated: {updated_count}."
+            f"Import complete. Created: {created_count}, Updated: {updated_count}, Skipped: {skipped_count}."
         )
         return redirect("materials")
 
@@ -551,6 +643,45 @@ class StickerSizeDeleteView(DeleteView):
     template_name = 'costing/sticker_size_confirm_delete.html'
     success_url = reverse_lazy('sticker_sizes')
 
+    def post(self, request, *args, **kwargs):
+        sticker_size = self.get_object()
+        try:
+            sticker_size.delete()
+            messages.success(request, "Sticker size deleted successfully.")
+        except ProtectedError:
+            sticker_size.is_active = False
+            sticker_size.save(update_fields=["is_active"])
+            messages.warning(
+                request,
+                "This sticker size is used in existing records, so it was archived instead of deleted."
+            )
+        return redirect("sticker_sizes")
+
+
+class BulkStickerSizeDeleteView(View):
+    def post(self, request, *args, **kwargs):
+        ids = request.POST.getlist("selected_sizes")
+        if not ids:
+            messages.warning(request, "No sticker sizes selected.")
+            return redirect("sticker_sizes")
+
+        deleted_count = 0
+        archived_count = 0
+        for sticker_size in StickerSize.objects.filter(id__in=ids):
+            try:
+                sticker_size.delete()
+                deleted_count += 1
+            except ProtectedError:
+                sticker_size.is_active = False
+                sticker_size.save(update_fields=["is_active"])
+                archived_count += 1
+
+        if deleted_count:
+            messages.success(request, f"{deleted_count} sticker size(s) deleted.")
+        if archived_count:
+            messages.warning(request, f"{archived_count} sticker size(s) had history and were archived instead.")
+        return redirect("sticker_sizes")
+
 
 class PaperSizeListView(ListView):
     model = PaperSize
@@ -577,6 +708,20 @@ class PaperSizeDeleteView(DeleteView):
     template_name = 'costing/paper_size_confirm_delete.html'
     success_url = reverse_lazy('paper_sizes')
 
+    def post(self, request, *args, **kwargs):
+        paper_size = self.get_object()
+        try:
+            paper_size.delete()
+            messages.success(request, "Paper size deleted successfully.")
+        except ProtectedError:
+            paper_size.is_active = False
+            paper_size.save(update_fields=["is_active"])
+            messages.warning(
+                request,
+                "This paper size is used in existing records, so it was archived instead of deleted."
+            )
+        return redirect("paper_sizes")
+
 class PaperSizeExportExcelView(View):
     def get(self, request, *args, **kwargs):
         wb = Workbook()
@@ -591,8 +736,9 @@ class PaperSizeExportExcelView(View):
             "is_active",
         ]
         ws.append(headers)
+        ws.freeze_panes = "A2"
 
-        for paper in PaperSize.objects.all():
+        for paper in PaperSize.objects.order_by("name"):
             ws.append([
                 paper.name,
                 paper.width_in,
@@ -601,28 +747,24 @@ class PaperSizeExportExcelView(View):
                 paper.is_active,
             ])
 
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response["Content-Disposition"] = 'attachment; filename="paper_sizes.xlsx"'
-        wb.save(response)
-        return response
+        return excel_response(wb, "paper_sizes.xlsx")
 
 
 class PaperSizeImportExcelView(View):
     def post(self, request, *args, **kwargs):
-        excel_file = request.FILES.get("excel_file")
-
-        if not excel_file:
-            messages.error(request, "Please select an Excel file.")
-            return redirect("paper_sizes")
-
-        wb = load_workbook(excel_file)
+        wb, error_response = open_import_workbook(request, "paper_sizes")
+        if error_response:
+            return error_response
         ws = wb.active
 
-        headers = [cell.value for cell in ws[1]]
+        headers = normalize_excel_headers(ws[1])
+        if "name" not in headers:
+            messages.error(request, "Import failed. The file needs a name column.")
+            return redirect("paper_sizes")
+
         created_count = 0
         updated_count = 0
+        skipped_count = 0
 
         for row in ws.iter_rows(min_row=2, values_only=True):
             data = dict(zip(headers, row))
@@ -630,15 +772,16 @@ class PaperSizeImportExcelView(View):
             name = data.get("name")
 
             if not name:
+                skipped_count += 1
                 continue
 
             paper, created = PaperSize.objects.update_or_create(
-                name=name,
+                name=str(name).strip(),
                 defaults={
-                    "width_in": data.get("width_in") or 0,
-                    "height_in": data.get("height_in") or 0,
-                    "use_cricut_safe_area": clean_bool(data.get("use_cricut_safe_area")),
-                    "is_active": clean_bool(data.get("is_active")),
+                    "width_in": clean_decimal(data.get("width_in")),
+                    "height_in": clean_decimal(data.get("height_in")),
+                    "use_cricut_safe_area": True if data.get("use_cricut_safe_area") in [None, ""] else clean_bool(data.get("use_cricut_safe_area")),
+                    "is_active": True if data.get("is_active") in [None, ""] else clean_bool(data.get("is_active")),
                 }
             )
 
@@ -649,9 +792,170 @@ class PaperSizeImportExcelView(View):
 
         messages.success(
             request,
-            f"Import complete. Created: {created_count}, Updated: {updated_count}."
+            f"Import complete. Created: {created_count}, Updated: {updated_count}, Skipped: {skipped_count}."
         )
         return redirect("paper_sizes")
+
+
+class SalesLogExportExcelView(View):
+    def get(self, request, *args, **kwargs):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sales"
+        headers = [
+            "created_at",
+            "receipt_number",
+            "platform",
+            "platform_order_id",
+            "tracking_number",
+            "courier",
+            "customer_name",
+            "buyer_username",
+            "buyer_phone",
+            "shipping_address",
+            "order_name",
+            "sticker_size",
+            "quantity",
+            "selling_price",
+            "shipping_fee",
+            "discount",
+            "platform_fee",
+            "sales_tax",
+            "cost",
+            "profit",
+            "payment_method",
+            "status",
+            "job_status",
+            "due_date",
+            "rush_order",
+            "deposit_amount",
+            "override_price",
+            "override_reason",
+            "notes",
+        ]
+        ws.append(headers)
+        ws.freeze_panes = "A2"
+
+        for sale in SaleLog.objects.order_by("-created_at"):
+            ws.append([
+                timezone.localtime(sale.created_at).strftime("%Y-%m-%d %H:%M:%S") if sale.created_at else "",
+                sale.receipt_number,
+                sale.platform,
+                sale.platform_order_id,
+                sale.tracking_number,
+                sale.courier,
+                sale.customer_name,
+                sale.buyer_username,
+                sale.buyer_phone,
+                sale.shipping_address,
+                sale.order_name,
+                sale.sticker_size,
+                sale.quantity,
+                sale.selling_price,
+                sale.shipping_fee,
+                sale.discount,
+                sale.platform_fee,
+                sale.sales_tax,
+                sale.cost,
+                sale.profit,
+                sale.payment_method,
+                sale.status,
+                sale.job_status,
+                sale.due_date.isoformat() if sale.due_date else "",
+                sale.rush_order,
+                sale.deposit_amount,
+                sale.override_price,
+                sale.override_reason,
+                sale.notes,
+            ])
+
+        return excel_response(wb, "sales_log.xlsx")
+
+
+class SalesLogImportExcelView(View):
+    def post(self, request, *args, **kwargs):
+        wb, error_response = open_import_workbook(request, "sales_log")
+        if error_response:
+            return error_response
+        ws = wb.active
+        headers = normalize_excel_headers(ws[1])
+
+        if "customer_name" not in headers and "order_name" not in headers:
+            messages.error(request, "Import failed. Include at least customer_name or order_name columns.")
+            return redirect("sales_log")
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            data = dict(zip(headers, row))
+            customer_name = (str(data.get("customer_name")).strip() if data.get("customer_name") else "")
+            order_name = (str(data.get("order_name")).strip() if data.get("order_name") else "")
+            receipt_number = (str(data.get("receipt_number")).strip() if data.get("receipt_number") else "")
+            platform_order_id = (str(data.get("platform_order_id")).strip() if data.get("platform_order_id") else "")
+
+            if not any([customer_name, order_name, receipt_number, platform_order_id]):
+                skipped_count += 1
+                continue
+
+            lookup = {}
+            if receipt_number and SaleLog.objects.filter(receipt_number=receipt_number).exists():
+                lookup["receipt_number"] = receipt_number
+            elif platform_order_id and SaleLog.objects.filter(platform_order_id=platform_order_id).exists():
+                lookup["platform_order_id"] = platform_order_id
+
+            sale = SaleLog.objects.filter(**lookup).first() if lookup else None
+            created = sale is None
+            if created:
+                sale = SaleLog()
+
+            sale.platform = clean_choice(data.get("platform") or SaleLog.PLATFORM_WALKIN, SaleLog.PLATFORM_CHOICES, SaleLog.PLATFORM_WALKIN)
+            sale.platform_order_id = platform_order_id
+            sale.tracking_number = data.get("tracking_number") or ""
+            sale.courier = data.get("courier") or ""
+            sale.customer_name = customer_name
+            sale.buyer_username = data.get("buyer_username") or ""
+            sale.buyer_phone = data.get("buyer_phone") or ""
+            sale.shipping_address = data.get("shipping_address") or ""
+            sale.order_name = order_name
+            sale.sticker_size = data.get("sticker_size") or ""
+            sale.quantity = clean_int(data.get("quantity"))
+            sale.selling_price = clean_decimal(data.get("selling_price"))
+            sale.shipping_fee = clean_decimal(data.get("shipping_fee"))
+            sale.discount = clean_decimal(data.get("discount"))
+            sale.platform_fee = clean_decimal(data.get("platform_fee"))
+            sale.sales_tax = clean_decimal(data.get("sales_tax"))
+            sale.cost = clean_decimal(data.get("cost"))
+            sale.profit = clean_decimal(data.get("profit"), str(sale.net_total - sale.cost))
+            sale.payment_method = clean_choice(data.get("payment_method") or SaleLog.PAYMENT_CASH, SaleLog.PAYMENT_CHOICES, SaleLog.PAYMENT_CASH)
+            sale.status = clean_choice(data.get("status") or SaleLog.STATUS_COMPLETED, SaleLog.STATUS_CHOICES, SaleLog.STATUS_COMPLETED)
+            sale.job_status = clean_choice(data.get("job_status") or SaleLog.JOB_RELEASED, SaleLog.JOB_CHOICES, SaleLog.JOB_RELEASED)
+            sale.due_date = parse_date(str(data.get("due_date")).strip()) if data.get("due_date") else None
+            sale.rush_order = clean_bool(data.get("rush_order"))
+            sale.deposit_amount = clean_decimal(data.get("deposit_amount"))
+            sale.override_price = clean_decimal(data.get("override_price"))
+            sale.override_reason = data.get("override_reason") or ""
+            sale.notes = data.get("notes") or ""
+            sale.stock_deducted = False
+            sale.save()
+
+            imported_created_at = clean_import_datetime(data.get("created_at"))
+            if imported_created_at:
+                SaleLog.objects.filter(pk=sale.pk).update(created_at=imported_created_at)
+            if receipt_number:
+                SaleLog.objects.filter(pk=sale.pk).update(receipt_number=receipt_number)
+
+            if created:
+                created_count += 1
+            else:
+                updated_count += 1
+
+        messages.success(
+            request,
+            f"Sales import complete. Created: {created_count}, Updated: {updated_count}, Skipped: {skipped_count}."
+        )
+        return redirect("sales_log")
 
 
 class SaleLogUpdateView(UpdateView):

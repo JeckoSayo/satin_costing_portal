@@ -2,9 +2,6 @@
 
 {% block content %}
 
-<form id="bulkDeleteForm" method="post" action="{% url 'material_bulk_delete' %}">
-{% csrf_token %}
-
 <div class="materials-page">
 
     <div class="materials-head">
@@ -16,6 +13,24 @@
         </div>
 
         <div class="materials-actions">
+            <a href="{% url 'material_export_excel' %}" class="btn master-export-btn">
+                <i class="bi bi-file-earmark-excel me-1"></i>
+                Export
+            </a>
+
+            <form method="post" action="{% url 'material_import_excel' %}" enctype="multipart/form-data" class="master-import-form">
+                {% csrf_token %}
+                <label class="master-file-picker">
+                    <i class="bi bi-file-earmark-arrow-up"></i>
+                    <span data-file-label>Choose Excel</span>
+                    <input type="file" name="excel_file" accept=".xlsx" required>
+                </label>
+                <button type="submit" class="btn master-import-btn">
+                    <i class="bi bi-upload me-1"></i>
+                    Import
+                </button>
+            </form>
+
             <a href="{% url 'material_add' %}" class="btn materials-add-btn">
                 <i class="bi bi-plus-lg me-1"></i>
                 Add Material
@@ -33,23 +48,19 @@
                 Delete Selected
             </button>
         </div>
-
-        <a href="{% url 'material_export_excel' %}" class="btn btn-success">
-    <i class="bi bi-file-earmark-excel me-1"></i>
-    Export Excel
-</a>
-
-<form method="post" action="{% url 'material_import_excel' %}" enctype="multipart/form-data" class="d-inline">
-    {% csrf_token %}
-    <input type="file" name="excel_file" accept=".xlsx" required class="form-control d-inline-block" style="width: 260px;">
-    <button type="submit" class="btn btn-primary">
-        <i class="bi bi-upload me-1"></i>
-        Import Excel
-    </button>
-</form>
     </div>
 
+    <form id="bulkDeleteForm" method="post" action="{% url 'material_bulk_delete' %}">
+    {% csrf_token %}
+
     <div class="materials-table-card">
+        <div class="master-table-head">
+            <div>
+                <h2>Inventory Materials</h2>
+                <p>Export a template, update costs or stock in Excel, then import it back to update matching item names.</p>
+            </div>
+            <span class="master-count-pill">{{ materials|length }} items</span>
+        </div>
 
         <div class="table-responsive">
             <table id="materialsTable" class="table materials-table align-middle mb-0 w-100">
@@ -164,14 +175,6 @@
 
                     </tr>
 
-                {% empty %}
-
-                    <tr>
-                        <td colspan="11" class="text-center py-5 text-muted fw-bold">
-                            No materials found.
-                        </td>
-                    </tr>
-
                 {% endfor %}
 
                 </tbody>
@@ -181,9 +184,9 @@
 
     </div>
 
-</div>
+    </form>
 
-</form>
+</div>
 
 <!-- DELETE MODAL -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
@@ -314,5 +317,12 @@ if (confirmDeleteBtn) {
 }
 
 updateBulkDeleteButton();
+
+document.querySelectorAll(".master-file-picker input[type='file']").forEach(function(input) {
+    input.addEventListener("change", function() {
+        const label = input.closest(".master-file-picker").querySelector("[data-file-label]");
+        label.textContent = input.files && input.files.length ? input.files[0].name : "Choose Excel";
+    });
+});
 </script>
 {% endblock %}

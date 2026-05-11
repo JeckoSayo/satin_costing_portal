@@ -4,11 +4,33 @@
 
 <div class="sales-page">
 
-  <div class="sales-page-head">
-    <h1 class="page-title mb-1">Sales Log</h1>
-    <p class="page-subtitle mb-0">
-      Track and manage all your sales transactions.
-    </p>
+  <div class="sales-page-head master-page-head">
+    <div>
+      <h1 class="page-title mb-1">Sales Log</h1>
+      <p class="page-subtitle mb-0">
+        Track orders, previous customers, payments, and profit history.
+      </p>
+    </div>
+
+    <div class="materials-actions">
+      <a href="{% url 'sales_export_excel' %}" class="btn master-export-btn">
+        <i class="bi bi-file-earmark-excel me-1"></i>
+        Export
+      </a>
+
+      <form method="post" action="{% url 'sales_import_excel' %}" enctype="multipart/form-data" class="master-import-form">
+        {% csrf_token %}
+        <label class="master-file-picker">
+          <i class="bi bi-person-lines-fill"></i>
+          <span data-file-label>Choose Sales Excel</span>
+          <input type="file" name="excel_file" accept=".xlsx" required>
+        </label>
+        <button type="submit" class="btn master-import-btn">
+          <i class="bi bi-upload me-1"></i>
+          Import
+        </button>
+      </form>
+    </div>
   </div>
 
   <div class="sales-stat-grid">
@@ -34,7 +56,12 @@
   </div>
 
   <div class="sales-filter-card">
-    <h2>Search Filters</h2>
+    <div class="master-table-head compact">
+      <div>
+        <h2>Search Filters</h2>
+        <p>Use customer names from imported past orders to find repeat buyers quickly.</p>
+      </div>
+    </div>
 
     <form method="get" class="sales-filter-grid">
       <input
@@ -74,7 +101,13 @@
   </div>
 
   <div class="sales-table-card">
-    <h2>Sales Table</h2>
+    <div class="master-table-head">
+      <div>
+        <h2>Sales Table</h2>
+        <p>Import one row per old order to build customer history before launching the full workflow.</p>
+      </div>
+      <span class="master-count-pill">{{ total_orders }} orders</span>
+    </div>
 
     <div class="table-responsive">
       <table id="salesTable" class="table sales-table align-middle mb-0">
@@ -231,6 +264,13 @@ $(document).ready(function () {
         searchable: false
       }
     ]
+  });
+});
+
+document.querySelectorAll(".master-file-picker input[type='file']").forEach(function(input) {
+  input.addEventListener("change", function() {
+    const label = input.closest(".master-file-picker").querySelector("[data-file-label]");
+    label.textContent = input.files && input.files.length ? input.files[0].name : "Choose Sales Excel";
   });
 });
 </script>
