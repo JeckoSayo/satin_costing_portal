@@ -49,6 +49,7 @@ class MaterialForm(BootstrapModelForm):
 
         help_texts = {
             "packaging_capacity": "For packaging only. Example: if 1 OPP bag holds 2 stickers, enter 2.",
+            "reorder_level": "Low stock warning point. Example: if Stock Qty is 5 and Reorder Level is 5, the item is marked Low. Leave 0 or blank for equipment/tools.",
         }
 
     def __init__(self, *args, **kwargs):

@@ -579,23 +579,26 @@ class MaterialImportExcelView(View):
                 skipped_count += 1
                 continue
 
+            defaults = {
+                "category": data.get("category") or Material.CATEGORY_OTHER,
+                "pack_price": clean_decimal(data.get("pack_price")),
+                "pack_qty": clean_decimal(data.get("pack_qty"), "1") or Decimal("1"),
+                "stock_qty": clean_decimal(data.get("stock_qty")),
+                "unit": data.get("unit") or "pcs",
+                "costing_basis": data.get("costing_basis") or Material.BASIS_PER_SHEET,
+                "reorder_level": clean_decimal(data.get("reorder_level")),
+                "supplier": data.get("supplier") or "",
+                "use_type": data.get("use_type") or Material.USE_DIRECT,
+                "packaging_capacity": clean_int(data.get("packaging_capacity"), 1) or 1,
+                "is_active": True if data.get("is_active") in [None, ""] else clean_bool(data.get("is_active")),
+                "notes": data.get("notes") or "",
+            }
+            if data.get("sku"):
+                defaults["sku"] = data.get("sku")
+
             material, created = Material.objects.update_or_create(
                 item_name=str(item_name).strip(),
-                defaults={
-                    "category": data.get("category") or Material.CATEGORY_OTHER,
-                    "pack_price": clean_decimal(data.get("pack_price")),
-                    "pack_qty": clean_decimal(data.get("pack_qty"), "1") or Decimal("1"),
-                    "stock_qty": clean_decimal(data.get("stock_qty")),
-                    "unit": data.get("unit") or "pcs",
-                    "costing_basis": data.get("costing_basis") or Material.BASIS_PER_SHEET,
-                    "reorder_level": clean_decimal(data.get("reorder_level")),
-                    "sku": data.get("sku") or "",
-                    "supplier": data.get("supplier") or "",
-                    "use_type": data.get("use_type") or Material.USE_DIRECT,
-                    "packaging_capacity": clean_int(data.get("packaging_capacity"), 1) or 1,
-                    "is_active": True if data.get("is_active") in [None, ""] else clean_bool(data.get("is_active")),
-                    "notes": data.get("notes") or "",
-                }
+                defaults=defaults,
             )
 
             if created:

@@ -67,6 +67,9 @@
         <div>
           <label class="form-label" for="{{ form.reorder_level.id_for_label }}">Reorder Level</label>
           {{ form.reorder_level }}
+          <div class="form-text">
+            Low stock warning point. Example: if Stock Qty is 5 and Reorder Level is 5, this item is marked Low. Leave 0 or blank for equipment/tools.
+          </div>
           {% if form.reorder_level.errors %}
             <div class="field-error">{{ form.reorder_level.errors }}</div>
           {% endif %}

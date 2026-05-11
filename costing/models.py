@@ -160,6 +160,51 @@ class Material(models.Model):
     def __str__(self):
         return self.item_name
 
+    @classmethod
+    def sku_prefix_for(cls, category, use_type):
+        if use_type == cls.USE_EQUIPMENT:
+            return "EQP"
+        if use_type == cls.USE_TOOL:
+            return "TOOL"
+
+        prefixes = {
+            cls.CATEGORY_STICKER: "PAPER",
+            cls.CATEGORY_LAMINATION: "LAM",
+            cls.CATEGORY_PACKAGING: "PACK",
+            cls.CATEGORY_INK: "INK",
+            cls.CATEGORY_OTHER: "OTHER",
+        }
+        return prefixes.get(category, "MAT")
+
+    def generate_sku(self):
+        prefix = self.sku_prefix_for(self.category, self.use_type)
+        used_numbers = []
+
+        qs = Material.objects.filter(sku__startswith=f"{prefix}-")
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+
+        for sku in qs.values_list("sku", flat=True):
+            try:
+                used_numbers.append(int(str(sku).rsplit("-", 1)[1]))
+            except (IndexError, TypeError, ValueError):
+                continue
+
+        next_number = (max(used_numbers) + 1) if used_numbers else 1
+        while True:
+            candidate = f"{prefix}-{next_number:03d}"
+            exists = Material.objects.filter(sku=candidate).exclude(pk=self.pk).exists()
+            if not exists:
+                return candidate
+            next_number += 1
+
+    def save(self, *args, **kwargs):
+        if not str(self.sku or "").strip():
+            self.sku = self.generate_sku()
+        else:
+            self.sku = str(self.sku).strip().upper()
+        super().save(*args, **kwargs)
+
     @property
     def unit_cost(self):
         if not self.pack_qty:
