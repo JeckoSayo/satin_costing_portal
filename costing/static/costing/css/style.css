@@ -681,20 +681,25 @@ table.dataTable td:last-child{
 }
 
 .pricing-rule-row{
+  display:grid !important;
+  grid-template-columns:104px minmax(0,1fr);
   align-items:flex-start !important;
 }
 
 .pricing-rule-row span{
-  flex:0 0 104px;
+  min-width:0;
   white-space:normal;
 }
 
 .pricing-rule-row strong{
-  flex:1 1 auto;
   min-width:0;
-  text-align:left;
+  max-width:100%;
+  display:block;
+  text-align:left !important;
   line-height:1.45;
-  overflow-wrap:break-word;
+  white-space:normal !important;
+  overflow-wrap:anywhere;
+  word-break:normal;
 }
 
 .metric-yellow{
@@ -2874,6 +2879,20 @@ select{
 .queue-mini-list strong,
 .stock-alert-list strong{
   flex-shrink:0;
+}
+
+.figma-metric-list > .pricing-rule-row{
+  display:grid !important;
+  grid-template-columns:104px minmax(0,1fr);
+}
+
+.figma-metric-list > .pricing-rule-row strong{
+  max-width:100%;
+  min-width:0;
+  flex-shrink:1;
+  white-space:normal !important;
+  overflow-wrap:anywhere;
+  text-align:left !important;
 }
 
 @media(max-width:991.98px){

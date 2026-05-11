@@ -53,12 +53,12 @@
         </button>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <button type="button" class="btn btn-sm btn-primary rounded-pill" onclick="applyQuickPreset('sticker_bundle')">4 for ₱100 Stickers</button>
-        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('logo_50')">50 Logo Labels</button>
-        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('logo_100')">100 Product Labels</button>
-        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('photo_4r')">4R Photo</button>
-        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('invitation_50')">Invitation 50 pcs</button>
-        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" onclick="applyQuickPreset('cake_topper')">Cake Topper</button>
+        <button type="button" class="btn btn-sm btn-primary rounded-pill quick-preset-btn" data-preset="sticker_bundle" onclick="applyQuickPreset('sticker_bundle')">4 for ₱100 Stickers</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill quick-preset-btn" data-preset="logo_50" onclick="applyQuickPreset('logo_50')">50 Logo Labels</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill quick-preset-btn" data-preset="logo_100" onclick="applyQuickPreset('logo_100')">100 Product Labels</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill quick-preset-btn" data-preset="photo_4r" onclick="applyQuickPreset('photo_4r')">4R Photo</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill quick-preset-btn" data-preset="invitation_50" onclick="applyQuickPreset('invitation_50')">Invitation 50 pcs</button>
+        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill quick-preset-btn" data-preset="cake_topper" onclick="applyQuickPreset('cake_topper')">Cake Topper</button>
       </div>
     </div>
 
@@ -1609,6 +1609,12 @@ function applyQuickPreset(name) {
   };
   const preset = presets[name];
   if (!preset) return;
+  document.querySelectorAll(".quick-preset-btn").forEach(function (button) {
+    const isActive = button.dataset.preset === name;
+    button.classList.toggle("btn-primary", isActive);
+    button.classList.toggle("btn-outline-primary", !isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
   setValue("orderName", preset.orderName);
   setValue("quantity", preset.qty);
   setValue("targetSalePrice", preset.target || 0);
