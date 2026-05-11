@@ -680,6 +680,23 @@ table.dataTable td:last-child{
   color:#e85b9c;
 }
 
+.pricing-rule-row{
+  align-items:flex-start !important;
+}
+
+.pricing-rule-row span{
+  flex:0 0 104px;
+  white-space:normal;
+}
+
+.pricing-rule-row strong{
+  flex:1 1 auto;
+  min-width:0;
+  text-align:left;
+  line-height:1.45;
+  overflow-wrap:break-word;
+}
+
 .metric-yellow{
   background:#fff8e8 !important;
   border:1px solid #f5dfaa;
