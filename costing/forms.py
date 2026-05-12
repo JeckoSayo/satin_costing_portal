@@ -166,6 +166,13 @@ class QuoteForm(forms.Form):
         min_value=0,
     )
 
+    target_unit_price = forms.DecimalField(
+        required=False,
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+    )
+
     shipping_fee = forms.DecimalField(
         required=False,
         max_digits=12,

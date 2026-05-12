@@ -181,7 +181,12 @@
                 <select id="stickerSize" class="form-select figma-control user-input">
                   <option value="">Select size</option>
                   {% for size in sticker_sizes %}
-                    <option value="{{ size.id }}" data-per-sheet="{{ size.best_for_costing }}" data-width="{{ size.width_in }}" data-height="{{ size.height_in }}">
+                    <option value="{{ size.id }}"
+                            data-per-sheet="{{ size.best_for_costing }}"
+                            data-cricut-qty="{{ size.safe_fit }}"
+                            data-full-qty="{{ size.max_tight_fit }}"
+                            data-width="{{ size.width_in }}"
+                            data-height="{{ size.height_in }}">
                       {{ size.name }}
                     </option>
                   {% endfor %}
@@ -218,6 +223,15 @@
                 </select>
               </div>
 
+              <div class="figma-field">
+                <label>Cutting Mode</label>
+                <div class="form-check mt-2">
+                  <input type="checkbox" id="useCricutSafeArea" class="form-check-input user-input" checked>
+                  <label class="form-check-label fw-bold" for="useCricutSafeArea">Cricut cut?</label>
+                </div>
+                <small class="text-muted">Checked = Cricut safe qty. Unchecked = full-sheet / print-only qty.</small>
+              </div>
+
               <div id="customSizePanel" class="figma-field full d-none">
                 <div class="order-details-grid">
                   <div class="figma-field">
@@ -250,15 +264,6 @@
                         <option value="a4" data-width="8.27" data-height="11.69" data-cricut-width="7.19" data-cricut-height="9.70">A4 default — 8.27 x 11.69 in</option>
                       {% endfor %}
                     </select>
-                  </div>
-                  <div class="figma-field full">
-                    <div class="form-check d-flex align-items-center gap-2">
-                      <input type="checkbox" id="useCricutSafeArea" class="form-check-input user-input" checked>
-                      <label class="form-check-label fw-bold mb-0" for="useCricutSafeArea">
-                        Use Cricut safe area / Print then cut
-                      </label>
-                    </div>
-                    <small class="text-muted">Unchecked = print-only mode uses the full selected paper size.</small>
                   </div>
                   <div class="figma-field full">
                     <div class="form-check d-flex align-items-center gap-2">
@@ -437,6 +442,12 @@
                 <label>Manual Override Price <span>(Optional)</span></label>
                 <input type="number" id="targetSalePrice" class="form-control figma-control user-input" value="0" placeholder="Leave 0 to use smart price">
                 <small class="text-muted">Use for repeat customers, promos, or fixed package prices.</small>
+              </div>
+
+              <div class="figma-field">
+                <label>Manual Override Price / Piece <span>(Optional)</span></label>
+                <input type="number" id="targetUnitPrice" class="form-control figma-control user-input" value="0" placeholder="Leave 0 to use smart price" step="0.01" min="0">
+                <small class="text-muted">Multiplies by quantity and overrides the total manual price.</small>
               </div>
 
               <div class="figma-field">
@@ -769,7 +780,7 @@
             Cancel
           </button>
 
-          <button type="submit" name="action" value="log_sale" class="btn figma-log-btn" form="calculatorForm">
+          <button type="button" id="confirmLogSaleBtn" class="btn figma-log-btn" onclick="submitFullOrder()">
             Yes, Log Sale
           </button>
         </div>
@@ -820,6 +831,10 @@ let orderItems = [];
 
 function money(value) {
   return "₱" + Number(value || 0).toFixed(2);
+}
+
+function roundedMoney(value) {
+  return money(Math.round(Number(value || 0))).replace(".00", "");
 }
 
 function cleanMoney(value) {
@@ -988,9 +1003,10 @@ function getActivePaperArea() {
 function calculateFitPerSheet(itemWidth, itemHeight) {
   const paper = getActivePaperArea();
   if (itemWidth <= 0 || itemHeight <= 0) return 0;
-  const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
-  const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
-  return Math.max(normal, rotated, 0);
+  return Math.max(
+    Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight),
+    0
+  );
 }
 
 function getFitDetails(itemWidth, itemHeight) {
@@ -1000,9 +1016,7 @@ function getFitDetails(itemWidth, itemHeight) {
   }
   const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
   const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
-  return rotated > normal
-    ? { fit: rotated, orientation: "Rotated", normal, rotated }
-    : { fit: normal, orientation: "Normal", normal, rotated };
+  return { fit: Math.max(normal, 0), orientation: "Normal", normal, rotated };
 }
 
 function getStickersPerSheet() {
@@ -1017,7 +1031,9 @@ function getStickersPerSheet() {
   }
 
   const selectedOption = sizeSelect.options[sizeSelect.selectedIndex];
-  return Number(selectedOption.dataset.perSheet || 1);
+  const useCricut = document.getElementById("useCricutSafeArea")?.checked;
+  const qty = useCricut ? selectedOption.dataset.cricutQty : selectedOption.dataset.fullQty;
+  return Number(qty || selectedOption.dataset.perSheet || 1);
 }
 
 function getStickerSizeText() {
@@ -1198,6 +1214,8 @@ function calculateQuote() {
   const taxPercent = numberValue("taxPercent");
   const safetyBufferAmount = numberValue("safetyBufferAmount");
   const targetSalePrice = numberValue("targetSalePrice");
+  const targetUnitPrice = numberValue("targetUnitPrice");
+  const effectiveTargetSalePrice = targetUnitPrice > 0 ? targetUnitPrice * qty : targetSalePrice;
   const legacyMinimumOrderPrice = numberValue("minimumOrderPrice");
   const smartPricing = getSmartPricingPolicy(qty);
   const minimumOrderPrice = Math.max(0, smartPricing.minimum || legacyMinimumOrderPrice);
@@ -1261,11 +1279,15 @@ function calculateQuote() {
       ? totalCost / (1 - protectedMarginPercent / 100)
       : 0;
 
-  const recommendedBasePrice =
-    roundSellingPrice(Math.max(markupPrice, marginPrice, targetSalePrice || 0, minimumOrderPrice));
+  const hasManualOverride = effectiveTargetSalePrice > 0;
+  const recommendedBasePrice = hasManualOverride
+    ? effectiveTargetSalePrice
+    : roundSellingPrice(Math.max(markupPrice, marginPrice, minimumOrderPrice));
 
-  const discountTotal = recommendedBasePrice * (discountPercent / 100);
-  const productSalePrice = roundSellingPrice(Math.max(recommendedBasePrice - discountTotal, minimumOrderPrice));
+  const discountTotal = hasManualOverride ? 0 : recommendedBasePrice * (discountPercent / 100);
+  const productSalePrice = hasManualOverride
+    ? effectiveTargetSalePrice
+    : roundSellingPrice(Math.max(recommendedBasePrice - discountTotal, minimumOrderPrice));
   const salesTax = productSalePrice * (taxPercent / 100);
   const salesPriceTax = productSalePrice + salesTax + shippingFee;
 
@@ -1294,7 +1316,7 @@ function calculateQuote() {
   setText("orientationUsed", fitDetails.orientation || "-");
   setText("costingQtyText", costingQtySheet);
   setText("sheetsNeeded", sheetsNeeded);
-  setText("pricePiece", money(pricePiece));
+  setText("pricePiece", roundedMoney(pricePiece));
   setText("finalPrice", money(salesPriceTax));
   setText("profitPiece", money(profitPiece));
   setText("salesPriceTaxOverview", money(salesPriceTax));
@@ -1304,7 +1326,7 @@ function calculateQuote() {
   setText("totalProductCost", money(totalCost));
   setText("markupPrice", money(markupPrice));
   setText("marginPrice", money(marginPrice));
-  setText("targetSalePriceResult", targetSalePrice ? money(targetSalePrice) : "-");
+  setText("targetSalePriceResult", effectiveTargetSalePrice ? money(effectiveTargetSalePrice) : "-");
   setText("recommendedBasePrice", money(recommendedBasePrice));
   setText("discountTotal", discountTotal ? money(discountTotal) : "-");
   setText("productSalePrice", money(productSalePrice));
@@ -1419,6 +1441,7 @@ function getCurrentItemData() {
     labor_minutes: numberValue("laborMinutes"),
     additional_direct_cost: numberValue("additionalDirectCost"),
     target_sale_price: numberValue("targetSalePrice"),
+    target_unit_price: numberValue("targetUnitPrice"),
     product_type: document.getElementById("productType")?.value || "STICKER",
     cut_complexity: document.getElementById("cutComplexity")?.value || "SIMPLE",
     pricing_rule: document.getElementById("pricingReason")?.innerText || "",
@@ -1481,7 +1504,7 @@ function renderOrderItems() {
         <td>${item.material_name}</td>
         <td class="text-end">${item.quantity}</td>
         <td class="text-end">${item.sheets_needed}</td>
-        <td class="text-end">${money(item.unit_price)}</td>
+        <td class="text-end">${roundedMoney(item.unit_price)}</td>
         <td class="text-end">${money(item.line_total)}</td>
         <td class="text-end">${money(item.line_cost)}</td>
         <td class="text-end">${money(item.line_profit)}</td>
@@ -1523,6 +1546,7 @@ function clearCurrentItemOnly() {
   setValue("orderName", "");
   setValue("quantity", "0");
   setValue("targetSalePrice", "0");
+  setValue("targetUnitPrice", "0");
   setValue("overrideReason", "");
   calculateQuote();
 }
@@ -1586,6 +1610,75 @@ function openLogSaleModal() {
   logSaleModal.show();
 }
 
+async function submitFullOrder() {
+  if (orderItems.length === 0) {
+    alert("Please add at least one item to the order before logging sale.");
+    return;
+  }
+
+  const customerName = document.getElementById("customerName").value.trim();
+  if (!customerName) {
+    alert("Please enter Customer Name before logging sale.");
+    return;
+  }
+
+  renderOrderItems();
+
+  const button = document.getElementById("confirmLogSaleBtn");
+  const originalText = button ? button.innerHTML : "";
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Logging sale';
+  }
+
+  const payload = {
+    customer_name: customerName,
+    order_name: orderItems.map(item => item.product_name).join(", "),
+    platform: document.getElementById("platform")?.value || "Walk-in",
+    payment_method: document.getElementById("paymentMethod")?.value || "Cash",
+    status: document.getElementById("orderStatus")?.value || "Pending",
+    platform_order_id: document.getElementById("platformOrderId")?.value || "",
+    tracking_number: document.getElementById("trackingNumber")?.value || "",
+    courier: document.getElementById("courier")?.value || "",
+    buyer_username: document.getElementById("buyerUsername")?.value || "",
+    buyer_phone: document.getElementById("buyerPhone")?.value || "",
+    shipping_address: document.getElementById("shippingAddress")?.value || "",
+    weight_grams: numberValue("weightGrams"),
+    shipping_fee: numberValue("shippingFee"),
+    discount: cleanMoney(document.getElementById("discountTotal")?.innerText || 0),
+    order_items: orderItems
+  };
+
+  try {
+    const response = await fetch("{% url 'log_sale' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]")?.value || ""
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Could not log sale.");
+    }
+
+    orderItems = [];
+    renderOrderItems();
+    window.location.href = data.receipt_url || data.sales_log_url || "{% url 'sales_log' %}";
+  } catch (error) {
+    console.error("Log full order failed:", error);
+    alert(error.message || "Could not log sale. Please try again.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalText;
+    }
+  }
+}
+
 function selectFirstSizeContaining(text) {
   const select = document.getElementById("stickerSize");
   if (!select) return;
@@ -1618,6 +1711,7 @@ function applyQuickPreset(name) {
   setValue("orderName", preset.orderName);
   setValue("quantity", preset.qty);
   setValue("targetSalePrice", preset.target || 0);
+  setValue("targetUnitPrice", "0");
   setValue("productType", preset.productType);
   setValue("cutComplexity", preset.complexity || "SIMPLE");
   const cricut = document.getElementById("useCricutSafeArea");

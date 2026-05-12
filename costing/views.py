@@ -5,7 +5,7 @@ from openpyxl import Workbook, load_workbook
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, get_object_or_404
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import (
     TemplateView,
@@ -319,6 +319,45 @@ class LogSaleView(View):
         except json.JSONDecodeError:
             payload = request.POST.dict()
 
+        order_items = payload.get("order_items")
+        if order_items is None and payload.get("order_items_json"):
+            try:
+                order_items = json.loads(payload.get("order_items_json") or "[]")
+            except json.JSONDecodeError:
+                order_items = []
+
+        if order_items:
+            sale_payload = {
+                "customer_name": payload.get("customer_name", ""),
+                "order_name": payload.get("order_name", ""),
+                "platform": payload.get("platform") or SaleLog.PLATFORM_WALKIN,
+                "payment_method": payload.get("payment_method") or SaleLog.PAYMENT_CASH,
+                "status": payload.get("status") or SaleLog.STATUS_PENDING,
+                "platform_order_id": payload.get("platform_order_id", ""),
+                "tracking_number": payload.get("tracking_number", ""),
+                "courier": payload.get("courier", ""),
+                "buyer_username": payload.get("buyer_username", ""),
+                "buyer_phone": payload.get("buyer_phone", ""),
+                "shipping_address": payload.get("shipping_address", ""),
+                "weight_grams": payload.get("weight_grams") or 0,
+                "shipping_fee": payload.get("shipping_fee") or 0,
+                "discount": payload.get("discount") or 0,
+                "order_items": order_items,
+            }
+
+            try:
+                sale = create_sale_from_order_items(sale_payload)
+            except Exception as exc:
+                return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+            return JsonResponse({
+                "ok": True,
+                "message": f"Sale {sale.receipt_number} logged successfully.",
+                "sale_id": sale.id,
+                "receipt_url": reverse("sale_receipt", kwargs={"pk": sale.pk}),
+                "sales_log_url": reverse("sales_log"),
+            })
+
         # API-friendly endpoint: one item quote -> one sale.
         form = QuoteForm(payload)
         if not form.is_valid():
@@ -346,6 +385,7 @@ class LogSaleView(View):
             "labor_minutes": form.cleaned_data.get("labor_minutes"),
             "additional_direct_cost": form.cleaned_data.get("additional_direct_cost"),
             "target_sale_price": form.cleaned_data.get("target_sale_price"),
+            "target_unit_price": form.cleaned_data.get("target_unit_price"),
             "design_fee": payload.get("design_fee"),
         }
 

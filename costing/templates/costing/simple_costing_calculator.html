@@ -238,8 +238,14 @@
         <small class="text-muted">Optional delivery or courier fee.</small>
       </div>
         <div class="figma-field">
-          <label>Target Sale Price</label>
+          <label>Manual Override Price (Optional)</label>
           <input type="number" id="targetSalePrice" class="form-control figma-control" value="0.00" step="0.01" min="0">
+          <small class="text-muted">Use for repeat customers, promos, or fixed package prices.</small>
+        </div>
+        <div class="figma-field">
+          <label>Manual Override Price / Piece (Optional)</label>
+          <input type="number" id="targetUnitPrice" class="form-control figma-control" value="0.00" step="0.01" min="0">
+          <small class="text-muted">Multiplies by quantity and overrides the total manual price.</small>
         </div>
       </div>
     </div>
@@ -285,7 +291,7 @@
         <i class="bi bi-plus-circle me-1"></i> Add Item to Order
       </button>
 
-      <button type="button" class="btn btn-success mt-2" onclick="logSimpleOrder()">
+      <button type="button" class="btn btn-success mt-2" onclick="logSimpleOrder(this)">
         <i class="bi bi-receipt me-1"></i> Log Order
       </button>
     </div>
@@ -379,6 +385,7 @@
 <script>
 (function () {
   const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+  const roundedPeso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
   const csrfToken = '{{ csrf_token }}';
 
   const ids = [
@@ -387,7 +394,7 @@
     'paymentMethod', 'orderStatus', 'cricutCut',
     'materialId', 'laminationId', 'packagingId', 'otherMaterialId', 'packagingCapacity',
     'inkCostPerSheet', 'laborMinutes', 'additionalDirectCost',
-    'designFee', 'targetSalePrice'
+    'designFee', 'targetSalePrice', 'targetUnitPrice'
   ];
 
   let calculateTimer = null;
@@ -412,6 +419,14 @@
 
   function money(id, amount) {
     text(id, peso.format(numericAmount(amount)));
+  }
+
+  function roundedMoney(id, amount) {
+    text(id, roundedPeso.format(Math.round(numericAmount(amount))));
+  }
+
+  function formatRoundedMoney(amount) {
+    return roundedPeso.format(Math.round(numericAmount(amount)));
   }
 
   function getSelectedText(id) {
@@ -530,7 +545,7 @@
     money('srpResult', srp);
     money('shippingFeeText', result.shipping_fee || 0);
     money('roundedSrpResult', result.recommended_base_price || srp);
-    money('pricePerPiece', result.price_per_piece || 0);
+    roundedMoney('pricePerPiece', result.price_per_piece || 0);
 
     text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
     text('selectedSizeText', result.sticker_size || getSelectedText('stickerSize') || '-');
@@ -624,6 +639,7 @@
       labor_minutes: value('laborMinutes') || 0,
       additional_direct_cost: value('additionalDirectCost') || 0,
       target_sale_price: value('targetSalePrice') || 0,
+      target_unit_price: value('targetUnitPrice') || 0,
       design_fee: value('designFee') || 0,
       rush_percent: 0,
       platform: value('platform') || 'Walk-in',
@@ -683,6 +699,7 @@
       labor_minutes: value('laborMinutes') || 0,
       additional_direct_cost: value('additionalDirectCost') || 0,
       target_sale_price: value('targetSalePrice') || 0,
+      target_unit_price: value('targetUnitPrice') || 0,
       design_fee: value('designFee') || 0,
       sheets_needed: summary.sheetsNeeded || 0,
       unit_price: summary.pricePerPiece || 0,
@@ -725,7 +742,7 @@
           <td>${item.sticker_size}</td>
           <td>${item.quantity}</td>
           <td>${item.sheets_needed}</td>
-          <td>${peso.format(item.unit_price || 0)}</td>
+          <td>${formatRoundedMoney(item.unit_price || 0)}</td>
           <td>${peso.format(item.line_total || 0)}</td>
           <td>${peso.format(item.line_cost || 0)}</td>
           <td>${peso.format(item.line_profit || 0)}</td>
@@ -761,41 +778,28 @@
     renderSimpleOrderItems();
   };
 
-  window.logSimpleOrder = async function () {
+  window.logSimpleOrder = async function (button) {
     if (simpleOrderItems.length === 0) {
       alert('Please add at least one item before logging the order.');
       return;
     }
 
-    const firstItem = simpleOrderItems[0];
+    const originalText = button ? button.innerHTML : '';
+    if (button) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Logging order';
+    }
+
+    const orderName = simpleOrderItems.map(item => item.product_name).filter(Boolean).join(', ') || value('orderName') || 'Simple Costing Order';
 
     const payload = {
       customer_name: value('customerName') || '',
-      order_name: value('orderName') || 'Simple Costing Order',
+      order_name: orderName,
       platform: value('platform') || 'Walk-in',
       payment_method: value('paymentMethod') || 'Cash',
       status: value('orderStatus') || 'Pending',
-
-      sticker_size_id: firstItem.sticker_size_id,
-      size_mode: firstItem.size_mode,
-      custom_width: firstItem.custom_width,
-      custom_height: firstItem.custom_height,
-      custom_name: firstItem.custom_name,
-      save_custom_size: firstItem.save_custom_size,
-      paper_size_id: firstItem.paper_size_id,
-      quantity: firstItem.quantity,
-      material_id: firstItem.material_id,
-      lamination_id: firstItem.lamination_id,
-      packaging_id: firstItem.packaging_id,
-      other_material_id: firstItem.other_material_id,
-      packaging_capacity: firstItem.packaging_capacity,
-      use_cricut_cut: firstItem.use_cricut_cut,
-      ink_cost_per_sheet: firstItem.ink_cost_per_sheet,
-      labor_minutes: firstItem.labor_minutes,
-      additional_direct_cost: firstItem.additional_direct_cost,
-      target_sale_price: firstItem.target_sale_price,
-      design_fee: firstItem.design_fee,
-      shipping_fee: 0
+      shipping_fee: parseFloat(document.getElementById("shippingFee")?.value || 0),
+      order_items: simpleOrderItems
     };
 
     try {
@@ -816,13 +820,18 @@
         return;
       }
 
-      alert(data.message || 'Order logged successfully.');
       simpleOrderItems = [];
       renderSimpleOrderItems();
+      window.location.href = data.receipt_url || data.sales_log_url || '{% url "sales_log" %}';
 
     } catch (error) {
       console.error(error);
       alert('Could not log order.');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.innerHTML = originalText;
+      }
     }
   };
 
@@ -864,7 +873,7 @@
       `Profit: ${peso.format(summary.profit || 0)}`,
       `SRP: ${peso.format(summary.srp || 0)}`,
       `Rounded SRP: ${peso.format(summary.roundedSrp || 0)}`,
-      `Price / Piece: ${peso.format(summary.pricePerPiece || 0)}`,
+      `Price / Piece: ${formatRoundedMoney(summary.pricePerPiece || 0)}`,
       `Profit Margin: ${(summary.profitMargin || 0).toFixed(2)}%`
     ];
 

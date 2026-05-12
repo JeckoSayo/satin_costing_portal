@@ -1825,79 +1825,223 @@ table.dataTable td:last-child{
   border-color: #d97706;
   box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
 }
+.receipt-page {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
 .receipt-wrapper {
-  max-width: 900px;
+  width: min(100%, 720px);
   margin: auto;
 }
 
 .receipt-card {
   background: #fff;
-  border-radius: 20px;
-  padding: 35px;
+  border-radius: 12px;
+  padding: 34px 42px;
   box-shadow: 0 10px 35px rgba(0,0,0,.08);
 }
 
-.receipt-header h1 {
-  font-weight: 900;
+.acknowledgement-receipt {
+  color: #111;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-.receipt-meta-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 30px;
-  margin: 28px 0;
-  font-size: 14px;
-}
-
-.receipt-section-title {
-  font-weight: 800;
+.receipt-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
   margin-bottom: 12px;
 }
 
-.receipt-table thead th {
-  background: #f8fafc;
+.receipt-logo {
+  width: 46px !important;
+  height: 46px !important;
+  max-width: 46px !important;
+  min-width: 46px !important;
+  object-fit: contain;
+  border-radius: 50%;
+  flex: 0 0 46px;
 }
 
-.receipt-total-box {
-  max-width: 320px;
-  margin-left: auto;
-  margin-top: 25px;
+.receipt-brand-copy h1 {
+  margin: 0;
+  color: #2c86d3;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.receipt-total-row {
+.receipt-brand-copy p {
+  margin: 5px 0 0;
+  color: #111;
+  font-size: 12px;
+  text-align: center;
+}
+
+.receipt-title {
+  margin: 14px 0 18px;
+  color: #111;
+  font-size: 14px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.receipt-info-lines {
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.receipt-line-pair {
+  display: grid;
+  grid-template-columns: 1fr 210px;
+  gap: 18px;
+}
+
+.receipt-fill-line {
   display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #e5e7eb;
+  align-items: flex-end;
+  min-height: 22px;
+  border-bottom: 1px solid #111;
 }
 
-.receipt-total-row.grand-total {
-  font-size: 20px;
+.receipt-fill-line span {
+  flex: 0 0 auto;
+  padding-right: 4px;
+}
+
+.receipt-fill-line strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 3px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ack-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border: 2px solid #111;
+  font-size: 13px;
+}
+
+.ack-table th,
+.ack-table td {
+  border: 1px solid #111;
+  height: 31px;
+  padding: 5px 8px;
+  vertical-align: middle;
+}
+
+.ack-table th {
+  color: #111;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.ack-qty {
+  width: 72px;
+}
+
+.ack-price,
+.ack-amount {
+  width: 130px;
+}
+
+.receipt-muted {
+  color: #444;
+}
+
+.ack-empty-row td {
+  height: 30px;
+}
+
+.ack-total-row td {
+  height: 34px;
   font-weight: 900;
 }
 
-.receipt-footer {
-  color: #64748b;
-  font-size: 14px;
+.receipt-reference-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  color: #333;
+  font-size: 11px;
 }
 
 @media print {
 
   .sidebar,
   .navbar,
+  .mobile-brand,
+  .mobile-menu,
+  .brand,
+  .v4-tour-fab,
+  .v4-tour-card,
+  .v4-tour-backdrop,
+  .toast-container,
+  .mobile-topbar,
   .no-print,
   .page-header {
     display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  .app-shell,
+  .main-content,
+  .receipt-page,
+  .receipt-wrapper {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   body {
     background: #fff !important;
   }
 
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printArea,
+  #printArea * {
+    visibility: visible !important;
+  }
+
+  #printArea {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
   .receipt-card {
     box-shadow: none;
     border-radius: 0;
     padding: 0;
+  }
+
+  .acknowledgement-receipt {
+    width: 100%;
+  }
+
+  .receipt-logo {
+    width: 46px !important;
+    height: 46px !important;
+    max-width: 46px !important;
   }
 }
 

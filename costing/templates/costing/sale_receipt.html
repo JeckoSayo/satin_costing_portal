@@ -1,101 +1,93 @@
 {% extends "costing/base.html" %}
+{% load static %}
 
 {% block content %}
-
-<div class="container py-4">
-
+<div class="receipt-page">
   <div class="receipt-wrapper">
-
-    <div class="receipt-card" id="printArea">
-
-      <div class="receipt-header text-center">
-        <h1 class="mb-1">SATIN Creative Studio</h1>
-        <p class="text-muted mb-0">Order Receipt</p>
+    <div class="receipt-card acknowledgement-receipt" id="printArea">
+      <div class="receipt-brand-row">
+        <div class="receipt-brand-copy">
+          <h1>Satin Creative Studio</h1>
+          <p>{{ sale.platform }}{% if sale.platform_order_id %} | {{ sale.platform_order_id }}{% endif %}</p>
+        </div>
       </div>
 
-      <div class="receipt-meta-grid">
+      <h2 class="receipt-title">ACKNOWLEDGEMENT RECEIPT</h2>
 
-        <div><strong>Receipt #:</strong> {{ sale.receipt_number }}</div>
-        <div><strong>Date:</strong> {{ sale.created_at|date:"M d, Y h:i A" }}</div>
-
-        <div><strong>Customer:</strong> {{ sale.customer_name }}</div>
-        <div><strong>Platform:</strong> {{ sale.platform }}</div>
-
-        <div><strong>Payment:</strong> {{ sale.payment_method }}</div>
-        <div><strong>Status:</strong> {{ sale.status }}</div>
-
-        <div><strong>Order ID:</strong> {{ sale.platform_order_id|default:"-" }}</div>
-        <div><strong>Tracking #:</strong> {{ sale.tracking_number|default:"-" }}</div>
-
+      <div class="receipt-info-lines">
+        <div class="receipt-line-pair">
+          <div class="receipt-fill-line">
+            <span>SOLD TO:</span>
+            <strong>{{ sale.customer_name|default:sale.buyer_username|default:"" }}</strong>
+          </div>
+          <div class="receipt-fill-line receipt-date-line">
+            <span>DATE:</span>
+            <strong>{{ sale.created_at|date:"m/d/Y" }}</strong>
+          </div>
+        </div>
+        <div class="receipt-fill-line">
+          <span>ADDRESS:</span>
+          <strong>{{ sale.shipping_address|default:"" }}</strong>
+        </div>
+        <div class="receipt-fill-line">
+          <span>CONTACT NO.:</span>
+          <strong>{{ sale.buyer_phone|default:"" }}</strong>
+        </div>
       </div>
 
-      <h5 class="receipt-section-title">Items</h5>
-
-      <div class="table-responsive">
-        <table class="table receipt-table align-middle">
-          <thead>
+      <table class="ack-table">
+        <thead>
+          <tr>
+            <th class="ack-qty">QTY</th>
+            <th>DESCRIPTION</th>
+            <th class="ack-price">PRICE</th>
+            <th class="ack-amount">AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in sale.items.all %}
             <tr>
-              <th>Line</th>
-              <th>Product</th>
-              <th>Size</th>
-              <th class="text-end">Qty</th>
-              <th class="text-end">Unit</th>
-              <th class="text-end">Total</th>
+              <td class="text-center">{{ item.quantity }}</td>
+              <td>
+                {{ item.product_name|default:"Item" }}
+                {% if item.sticker_size %}<span class="receipt-muted"> - {{ item.sticker_size }}</span>{% endif %}
+              </td>
+              <td class="text-end">₱{{ item.unit_price|floatformat:0 }}</td>
+              <td class="text-end">₱{{ item.line_total|floatformat:0 }}</td>
             </tr>
-          </thead>
-
-          <tbody>
-            {% for item in sale.items.all %}
+          {% empty %}
             <tr>
-              <td>{{ item.line_id }}</td>
-              <td>{{ item.product_name }}</td>
-              <td>{{ item.sticker_size }}</td>
-              <td class="text-end">{{ item.quantity }}</td>
-              <td class="text-end">₱{{ item.unit_price|floatformat:2 }}</td>
-              <td class="text-end fw-bold">₱{{ item.line_total|floatformat:2 }}</td>
+              <td class="text-center">{{ sale.quantity }}</td>
+              <td>
+                {{ sale.order_name|default:"Item" }}
+                {% if sale.sticker_size %}<span class="receipt-muted"> - {{ sale.sticker_size }}</span>{% endif %}
+              </td>
+              <td class="text-end">₱{{ sale.price_per_piece|floatformat:0 }}</td>
+              <td class="text-end">₱{{ sale.selling_price|floatformat:0 }}</td>
             </tr>
-            {% empty %}
-            <tr>
-              <td>-</td>
-              <td>{{ sale.order_name }}</td>
-              <td>{{ sale.sticker_size }}</td>
-              <td class="text-end">{{ sale.quantity }}</td>
-              <td class="text-end">₱{{ sale.price_per_piece|floatformat:2 }}</td>
-              <td class="text-end fw-bold">₱{{ sale.selling_price|floatformat:2 }}</td>
+          {% endfor %}
+
+          {% for _ in "12345678" %}
+            <tr class="ack-empty-row">
+              <td>&nbsp;</td>
+              <td></td>
+              <td></td>
+              <td></td>
             </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+          {% endfor %}
+
+          <tr class="ack-total-row">
+            <td colspan="3" class="text-end">TOTAL:</td>
+            <td class="text-end">₱{{ sale.total_collected|floatformat:0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="receipt-reference-row">
+        <span>Receipt #: {{ sale.receipt_number }}</span>
+        <span>Payment: {{ sale.payment_method }}</span>
+        <span>Status: {{ sale.status }}</span>
       </div>
-
-      <div class="receipt-total-box">
-
-        <div class="receipt-total-row">
-          <span>Subtotal</span>
-          <strong>₱{{ sale.selling_price|floatformat:2 }}</strong>
-        </div>
-
-        <div class="receipt-total-row">
-          <span>Shipping</span>
-          <strong>₱{{ sale.shipping_fee|floatformat:2 }}</strong>
-        </div>
-
-        <div class="receipt-total-row">
-          <span>Sales Tax</span>
-          <strong>₱{{ sale.sales_tax|floatformat:2 }}</strong>
-        </div>
-
-        <div class="receipt-total-row grand-total">
-          <span>Total</span>
-          <strong>₱{{ sale.total_collected|floatformat:2 }}</strong>
-        </div>
-
-      </div>
-
-      <div class="receipt-footer text-center mt-4">
-        Thank you for your order!
-      </div>
-
     </div>
 
     <div class="text-center mt-4 no-print">
@@ -104,13 +96,60 @@
         Print Receipt
       </button>
 
+      <button type="button" onclick="downloadReceiptPng(this)" class="btn btn-success px-4 ms-2">
+        <i class="bi bi-download me-1"></i>
+        Download PNG
+      </button>
+
       <a href="{% url 'sales_log' %}" class="btn btn-outline-secondary px-4 ms-2">
         Back
       </a>
     </div>
-
   </div>
-
 </div>
+{% endblock %}
 
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+async function downloadReceiptPng(button) {
+  const receipt = document.getElementById("printArea");
+  if (!receipt || !window.html2canvas) {
+    alert("Receipt PNG export is not ready. Please check your internet connection and try again.");
+    return;
+  }
+
+  const originalText = button ? button.innerHTML : "";
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing PNG';
+  }
+
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    const canvas = await html2canvas(receipt, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      logging: false
+    });
+
+    const link = document.createElement("a");
+    link.download = "receipt-{{ sale.receipt_number|default:sale.id }}.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (error) {
+    console.error("Receipt PNG export failed:", error);
+    alert("Could not download the receipt PNG. Please try again.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalText;
+    }
+  }
+}
+</script>
 {% endblock %}

@@ -61,14 +61,6 @@ def calculate_fit_per_sheet(width, height, printable_width, printable_height):
     if normal_fit <= 0 and rotated_fit <= 0:
         raise ValueError("Custom size does not fit inside the selected print area.")
 
-    if rotated_fit > normal_fit:
-        return {
-            "fit_per_sheet": rotated_fit,
-            "orientation": "Rotated",
-            "normal_fit": normal_fit,
-            "rotated_fit": rotated_fit,
-        }
-
     return {
         "fit_per_sheet": normal_fit,
         "orientation": "Normal",
@@ -259,9 +251,13 @@ def calculate_quote(data):
     packaging = get_object_or_none(Material, data.get("packaging_id"))
     other_material = get_object_or_none(Material, data.get("other_material_id"))
 
+    sticker_size_for_default = None
+    if (data.get("size_mode") or "preset") != "custom":
+        sticker_size_for_default = get_object_or_none(StickerSize, data.get("sticker_size_id"))
+
     use_cricut_cut_raw = data.get("use_cricut_cut")
     if use_cricut_cut_raw in (None, ""):
-        use_cricut_cut = bool(sticker_size.use_cricut_safe_area) if sticker_size else True
+        use_cricut_cut = bool(sticker_size_for_default.use_cricut_safe_area) if sticker_size_for_default else True
     elif isinstance(use_cricut_cut_raw, bool):
         use_cricut_cut = use_cricut_cut_raw
     else:
@@ -295,6 +291,10 @@ def calculate_quote(data):
     manual_extra_minutes = D(data.get("labor_minutes"), "0")
     additional_direct_cost = D(data.get("additional_direct_cost"), settings.additional_direct_cost)
     target_sale_price = D(data.get("target_sale_price"), "0")
+    target_unit_price = D(data.get("target_unit_price"), "0")
+    target_unit_sale_price = target_unit_price * D(quantity)
+    if target_unit_sale_price > 0:
+        target_sale_price = target_unit_sale_price
     design_fee = D(data.get("design_fee"), "0")
     rush_percent = D(data.get("rush_percent"), "0")
     shipping_fee = D(data.get("shipping_fee"), "0")
@@ -344,12 +344,17 @@ def calculate_quote(data):
     rush_fee = base_price_before_floor * rush_percent / Decimal("100")
     minimum_order_price = settings.minimum_order_price
 
-    recommended_base_price = max(base_price_before_floor + rush_fee, minimum_order_price)
-    recommended_base_price = round_selling_price(recommended_base_price, settings.rounding_mode)
+    if target_sale_price > 0:
+        recommended_base_price = target_sale_price
+        discount = Decimal("0")
+        product_sale_price = target_sale_price
+    else:
+        recommended_base_price = max(base_price_before_floor + rush_fee, minimum_order_price)
+        recommended_base_price = round_selling_price(recommended_base_price, settings.rounding_mode)
 
-    discount = recommended_base_price * settings.default_discount_percent / Decimal("100")
-    product_sale_price = max(recommended_base_price - discount, minimum_order_price)
-    product_sale_price = round_selling_price(product_sale_price, settings.rounding_mode)
+        discount = recommended_base_price * settings.default_discount_percent / Decimal("100")
+        product_sale_price = max(recommended_base_price - discount, minimum_order_price)
+        product_sale_price = round_selling_price(product_sale_price, settings.rounding_mode)
 
     platform_fee = (product_sale_price * marketplace_fee_percent / Decimal("100")) + marketplace_fixed_fee
     sales_tax = product_sale_price * settings.default_sales_tax_percent / Decimal("100")
@@ -434,6 +439,7 @@ def calculate_quote(data):
         "markup_price": money(markup_price),
         "margin_price": money(margin_price),
         "target_sale_price": money(target_sale_price),
+        "target_unit_price": money(target_unit_price),
         "recommended_base_price": money(recommended_base_price),
         "discount": money(discount),
         "product_sale_price": money(product_sale_price),
@@ -543,6 +549,7 @@ def create_sale_from_order_items(payload):
             "labor_minutes": item.get("labor_minutes"),
             "additional_direct_cost": item.get("additional_direct_cost"),
             "target_sale_price": item.get("target_sale_price"),
+            "target_unit_price": item.get("target_unit_price"),
             "design_fee": item.get("design_fee"),
             "platform": platform,
         }
