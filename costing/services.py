@@ -1115,7 +1115,12 @@ def get_dashboard_realtime_payload():
         "low_stock_materials": [serialize_material(material) for material in low_stock_qs[:8]],
         "recent_sales": [serialize_sale(sale) for sale in SaleLog.objects.all()[:8]],
         "top_repeat_customers": list(
-            SaleLog.objects.exclude(customer_name="")
+            {
+                "customer_name": row["customer_name"],
+                "order_count": row["order_count"],
+                "total_spent": _decimal_to_float(row["total_spent"]),
+            }
+            for row in SaleLog.objects.exclude(customer_name="")
             .values("customer_name")
             .annotate(order_count=Count("id"), total_spent=Sum("selling_price"))
             .order_by("-order_count", "-total_spent")[:6]

@@ -16,6 +16,7 @@ from django.views.generic import (
     DetailView,
 )
 from django.db.models.deletion import ProtectedError
+from django.core.paginator import Paginator
 from .forms import (
     MaterialForm,
     StickerSizeForm,
@@ -31,6 +32,8 @@ from .forms import (
     StockPurchaseForm,
     ShopTaskForm,
     QuickPOSProductForm,
+    POSCategoryForm,
+    POSProductForm,
     SmartPasteInquiryForm,
     SmartPasteRawForm,
     )
@@ -52,10 +55,17 @@ from .models import (
     ShopTask,
     QuickPOSProduct,
     QuickPOSPriceSnapshot,
+    POSCategory,
+    POSProduct,
+    POSOrder,
+    POSOrderItem,
+    POSOrderItemAddon,
+    POSQueueItem,
     SmartPasteInquiry,
 )
 from .services import calculate_quote, create_sale_from_order_items, reverse_sale_inventory, calculate_product_preset_quote, save_product_quote, create_smart_paste_inquiry
-from django.db.models import Sum, F, Count, Q, Max
+from django.db.models import Sum, F, Count, Q, Max, Case, When, IntegerField
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 from django.utils.dateparse import parse_date, parse_datetime
@@ -1654,125 +1664,401 @@ class ProductCategoryCreateView(CreateView):
         return super().form_valid(form)
 
 
+def serialize_queue_item(queue_item):
+    order_item = queue_item.order_item
+    return {
+        "id": queue_item.id,
+        "customer_number": queue_item.order.customer_number,
+        "customer_name": queue_item.order.customer_name,
+        "order_number": queue_item.order.order_number,
+        "drink": order_item.product_name,
+        "quantity": order_item.quantity,
+        "status": queue_item.status,
+        "time_ordered": timezone.localtime(queue_item.queued_at).strftime("%I:%M %p"),
+        "addons": [
+            {"name": addon.addon_name, "quantity": addon.quantity}
+            for addon in order_item.addons.all()
+        ],
+    }
+
+
 class FastPOSView(TemplateView):
-    """V3.7 Fast Counter POS: editable product buttons with live material-cost margin checks."""
+    """Full retail POS for matcha drinks, stickers, cookies, add-ons, and the barista queue."""
     template_name = "costing/fast_pos.html"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        products = QuickPOSProduct.objects.filter(active=True).select_related(
-            "product_type", "product_preset", "main_material", "lamination", "packaging"
+        categories = (
+            POSCategory.objects.filter(is_active=True)
+            .annotate(
+                sort_order=Case(
+                    When(category_type=POSCategory.TYPE_DRINK, then=1),
+                    When(category_type=POSCategory.TYPE_STICKER, then=2),
+                    When(category_type=POSCategory.TYPE_COOKIE, then=3),
+                    default=4,
+                    output_field=IntegerField(),
+                )
+            )
+            .prefetch_related("products")
+            .order_by("sort_order", "name")
         )
-        ctx["pos_products"] = products
-        ctx["low_margin_products"] = [p for p in products if p.is_low_margin]
-        ctx["recent_pos_sales"] = SaleLog.objects.filter(notes__icontains="POS:")[:8]
+        products = POSProduct.objects.filter(is_active=True, category__is_active=True).select_related("category")
+        product_groups = []
+        for category in categories:
+            category_products = [product for product in products if product.category_id == category.id and not product.is_addon]
+            if category_products:
+                product_groups.append({"category": category, "products": category_products})
+        addons = list(products.filter(category__category_type=POSCategory.TYPE_ADDON))
+        today = timezone.localdate()
+        next_customer = (POSOrder.objects.filter(created_at__date=today).aggregate(max_customer=Max("customer_number"))["max_customer"] or 0) + 1
+        active_queue = POSQueueItem.objects.exclude(status=POSQueueItem.STATUS_COMPLETED).select_related(
+            "order", "order_item"
+        ).prefetch_related("order_item__addons")
+        completed_queue = POSQueueItem.objects.filter(status=POSQueueItem.STATUS_COMPLETED).select_related(
+            "order", "order_item"
+        ).prefetch_related("order_item__addons").order_by("-completed_at", "-queued_at", "-id")[:5]
+
+        ctx.update({
+            "product_groups": product_groups,
+            "addons": addons,
+            "active_queue": active_queue,
+            "completed_queue": completed_queue,
+            "next_customer_number": next_customer,
+            "recent_pos_orders": POSOrder.objects.all()[:8],
+        })
         return ctx
 
-    def post(self, request, *args, **kwargs):
-        product = get_object_or_404(QuickPOSProduct, pk=request.POST.get("product_id"), active=True)
-        bundle_count = int(request.POST.get("bundle_count") or 1)
-        customer_name = request.POST.get("customer_name", "Walk-in Customer") or "Walk-in Customer"
-        payment_method = request.POST.get("payment_method") or SaleLog.PAYMENT_CASH
 
-        requirements = product.material_requirements(bundle_count)
-        sheets = requirements["sheets"]
-        packaging_qty = requirements["packaging_qty"]
+class POSCreateOrderView(View):
+    def post(self, request):
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({"ok": False, "error": "Invalid order payload."}, status=400)
 
-        selling_price = product.selling_price * Decimal(str(bundle_count))
-        cost = product.estimated_cost * Decimal(str(bundle_count))
-        profit = selling_price - cost
-        total_qty = product.bundle_quantity * bundle_count
+        cart_items = payload.get("items") or []
+        if not cart_items:
+            return JsonResponse({"ok": False, "error": "Please add at least one item."}, status=400)
 
-        sale = SaleLog.objects.create(
-            platform=SaleLog.PLATFORM_WALKIN,
-            customer_name=customer_name,
-            order_name=product.name,
-            sticker_size=product.button_label or product.name,
-            quantity=total_qty,
-            selling_price=selling_price,
-            cost=cost,
-            profit=profit,
-            payment_method=payment_method,
-            status=SaleLog.STATUS_PAID,
-            job_status=SaleLog.JOB_RELEASED,
-            deposit_amount=selling_price,
-            notes=f"POS: {product.name} x {bundle_count} bundle(s)",
-            cost_breakdown={
-                "source": "V3.7 Fast POS",
-                "pos_product_id": product.id,
-                "bundle_count": bundle_count,
-                "bundle_quantity": product.bundle_quantity,
-                "estimated_cost_per_bundle": str(product.estimated_cost),
-                "margin_per_bundle": str(product.estimated_margin),
-            },
-        )
-        item = SaleLogItem.objects.create(
-            sale=sale,
-            line_number=1,
-            product_name=product.name,
-            sticker_size=product.button_label or product.name,
-            material=product.main_material,
-            lamination=product.lamination,
-            packaging=product.packaging,
-            material_name=product.main_material.item_name if product.main_material else "",
-            lamination_name=product.lamination.item_name if product.lamination else "",
-            packaging_name=product.packaging.item_name if product.packaging else "",
-            quantity=total_qty,
-            sheets_needed=int(sheets),
-            material_qty_used=sheets,
-            lamination_qty_used=sheets if product.lamination else Decimal("0.00"),
-            packaging_qty_used=packaging_qty if product.packaging else Decimal("0.00"),
-            unit_price=selling_price / Decimal(str(total_qty or 1)),
-            line_total=selling_price,
-            line_cost=cost,
-            line_profit=profit,
-        )
+        customer_name = str(payload.get("customer_name") or "").strip()
+        payment_method = payload.get("payment_method") or POSOrder.METHOD_CASH
+        if payment_method not in dict(POSOrder.METHOD_CHOICES):
+            payment_method = POSOrder.METHOD_CASH
+        discount_amount = clean_decimal(payload.get("discount_amount"), "0")
+        cash_received = clean_decimal(payload.get("cash_received"), "0")
+        today = timezone.localdate()
 
-        # Deduct linked inventory immediately for paid POS sales.
-        for material, qty in [
-            (product.main_material, sheets),
-            (product.lamination, sheets if product.lamination else Decimal("0.00")),
-            (product.packaging, packaging_qty if product.packaging else Decimal("0.00")),
-        ]:
-            if material and qty and qty > 0:
-                try:
-                    material.deduct_stock(qty)
-                    StockMovement.objects.create(
-                        material=material,
-                        sale=sale,
-                        sale_item=item,
-                        movement_type=StockMovement.MOVEMENT_OUT,
-                        quantity=qty,
-                        balance_after=material.stock_qty,
-                        notes=f"Fast POS sale: {product.name}",
+        with transaction.atomic():
+            customer_number = (POSOrder.objects.filter(created_at__date=today).aggregate(max_customer=Max("customer_number"))["max_customer"] or 0) + 1
+            order = POSOrder.objects.create(
+                customer_number=customer_number,
+                customer_name=customer_name,
+                payment_method=payment_method,
+            )
+            subtotal = Decimal("0.00")
+
+            for cart_item in cart_items:
+                product = get_object_or_404(POSProduct.objects.select_related("category"), pk=cart_item.get("product_id"), is_active=True)
+                quantity = max(clean_int(cart_item.get("quantity"), 1), 1)
+                line_total = product.price_for_quantity(quantity)
+                line_cost = (product.cost or Decimal("0.00")) * Decimal(str(quantity))
+                item = POSOrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    product_name=product.name,
+                    category_name=product.category.name,
+                    category_type=product.category.category_type,
+                    quantity=quantity,
+                    unit_price=product.price,
+                    line_total=line_total,
+                    unit_cost=product.cost or Decimal("0.00"),
+                    line_cost=line_cost,
+                    line_profit=line_total - line_cost,
+                )
+                subtotal += line_total
+
+                for addon_row in cart_item.get("addons") or []:
+                    addon = get_object_or_404(POSProduct.objects.select_related("category"), pk=addon_row.get("product_id"), is_active=True, category__category_type=POSCategory.TYPE_ADDON)
+                    addon_qty = max(clean_int(addon_row.get("quantity"), quantity), 1)
+                    addon_total = addon.price * Decimal(str(addon_qty))
+                    POSOrderItemAddon.objects.create(
+                        order_item=item,
+                        addon=addon,
+                        addon_name=addon.name,
+                        quantity=addon_qty,
+                        price=addon.price,
+                        line_total=addon_total,
                     )
-                except ValueError as exc:
-                    messages.warning(request, str(exc))
+                    subtotal += addon_total
 
-        sale.stock_deducted = True
-        sale.save(update_fields=["stock_deducted"])
-        messages.success(request, f"POS sale logged: {product.name} x {bundle_count} bundle(s).")
-        return redirect("fast_pos")
+                if product.category.category_type == POSCategory.TYPE_DRINK:
+                    POSQueueItem.objects.create(order=order, order_item=item)
+
+            total = max(subtotal - discount_amount, Decimal("0.00"))
+            if payment_method == POSOrder.METHOD_CASH and cash_received < total:
+                transaction.set_rollback(True)
+                return JsonResponse({"ok": False, "error": "Cash received is not enough for this order."}, status=400)
+            if payment_method == POSOrder.METHOD_ONLINE:
+                cash_received = total
+            change = max(cash_received - total, Decimal("0.00"))
+            order.subtotal = subtotal
+            order.discount_amount = discount_amount
+            order.total_amount = total
+            order.cash_received = cash_received
+            order.change_amount = change
+            order.payment_status = POSOrder.PAYMENT_PAID
+            order.save(update_fields=["subtotal", "discount_amount", "total_amount", "cash_received", "change_amount", "payment_method", "payment_status"])
+
+        return JsonResponse({
+            "ok": True,
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "customer_number": order.customer_number,
+            "receipt_url": reverse("pos_receipt", kwargs={"pk": order.pk}),
+            "next_customer_number": customer_number + 1,
+        })
+
+
+class POSQueueDataView(View):
+    def get(self, request):
+        active = POSQueueItem.objects.exclude(status=POSQueueItem.STATUS_COMPLETED).select_related(
+            "order", "order_item"
+        ).prefetch_related("order_item__addons")
+        completed = POSQueueItem.objects.filter(status=POSQueueItem.STATUS_COMPLETED).select_related(
+            "order", "order_item"
+        ).prefetch_related("order_item__addons").order_by("-completed_at", "-queued_at", "-id")[:5]
+        return JsonResponse({
+            "active": [serialize_queue_item(item) for item in active],
+            "completed": [serialize_queue_item(item) for item in completed],
+        })
+
+
+class POSQueueStatusView(View):
+    def post(self, request, pk):
+        queue_item = get_object_or_404(POSQueueItem, pk=pk)
+        new_status = request.POST.get("status")
+        valid_statuses = dict(POSQueueItem.STATUS_CHOICES)
+        if new_status not in valid_statuses:
+            return JsonResponse({"ok": False, "error": "Invalid queue status."}, status=400)
+        now = timezone.now()
+        queue_item.status = new_status
+        if new_status == POSQueueItem.STATUS_PREPARING and not queue_item.started_at:
+            queue_item.started_at = now
+        elif new_status == POSQueueItem.STATUS_READY and not queue_item.ready_at:
+            queue_item.ready_at = now
+        elif new_status == POSQueueItem.STATUS_COMPLETED and not queue_item.completed_at:
+            queue_item.completed_at = now
+        queue_item.save(update_fields=["status", "started_at", "ready_at", "completed_at"])
+        return JsonResponse({"ok": True, "item": serialize_queue_item(queue_item)})
+
+
+class POSReceiptView(DetailView):
+    model = POSOrder
+    template_name = "costing/pos_receipt.html"
+    context_object_name = "order"
+
+
+class POSSalesDashboardView(TemplateView):
+    template_name = "costing/pos_sales_dashboard.html"
+
+    def _date_range(self):
+        today = timezone.localdate()
+        period = self.request.GET.get("period", "today")
+        if period == "week":
+            return today - timedelta(days=today.weekday()), today, period
+        if period == "month":
+            return today.replace(day=1), today, period
+        if period == "year":
+            return today.replace(month=1, day=1), today, period
+        if period == "custom":
+            start = parse_date(self.request.GET.get("start") or "") or today
+            end = parse_date(self.request.GET.get("end") or "") or today
+            return start, end, period
+        return today, today, "today"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        start, end, period = self._date_range()
+        orders = POSOrder.objects.filter(
+            created_at__date__gte=start,
+            created_at__date__lte=end,
+        ).order_by("-created_at")
+        paginator = Paginator(orders, 10)
+        page_obj = paginator.get_page(self.request.GET.get("page"))
+        query_params = self.request.GET.copy()
+        query_params.pop("page", None)
+        items = POSOrderItem.objects.filter(order__in=orders)
+        addons = POSOrderItemAddon.objects.filter(order_item__order__in=orders)
+        total_sales = orders.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        total_orders = orders.count()
+        category_rows = (
+            items.values("category_type", "category_name")
+            .annotate(qty=Sum("quantity"), revenue=Sum("line_total"))
+            .order_by("category_type")
+        )
+        addon_qty = addons.aggregate(qty=Sum("quantity"))["qty"] or 0
+        addon_revenue = addons.aggregate(total=Sum("line_total"))["total"] or Decimal("0.00")
+        product_rows = (
+            items.values("product_name", "category_type")
+            .annotate(qty=Sum("quantity"), revenue=Sum("line_total"))
+            .order_by("-qty", "-revenue")[:8]
+        )
+        best_category = (
+            items.values("category_name")
+            .annotate(revenue=Sum("line_total"))
+            .order_by("-revenue")
+            .first()
+        )
+        day_labels, day_sales = [], []
+        cursor = start
+        while cursor <= end:
+            day_labels.append(cursor.strftime("%b %d"))
+            day_sales.append(float(orders.filter(created_at__date=cursor).aggregate(total=Sum("total_amount"))["total"] or 0))
+            cursor += timedelta(days=1)
+        category_labels = [row["category_name"] for row in category_rows]
+        category_values = [float(row["revenue"] or 0) for row in category_rows]
+        paginator = Paginator(orders, 10)
+        page_obj = paginator.get_page(self.request.GET.get("page"))
+        query_params = self.request.GET.copy()
+        query_params.pop("page", None)
+        ctx.update({
+            "period": period,
+            "start": start,
+            "end": end,
+            "total_sales": total_sales,
+            "total_orders": total_orders,
+            "total_drinks_sold": items.filter(category_type=POSCategory.TYPE_DRINK).aggregate(qty=Sum("quantity"))["qty"] or 0,
+            "total_stickers_sold": items.filter(category_type=POSCategory.TYPE_STICKER).aggregate(qty=Sum("quantity"))["qty"] or 0,
+            "total_cookies_sold": items.filter(category_type=POSCategory.TYPE_COOKIE).aggregate(qty=Sum("quantity"))["qty"] or 0,
+            "total_addons_sold": addon_qty,
+            "addon_revenue": addon_revenue,
+            "average_order_value": total_sales / total_orders if total_orders else Decimal("0.00"),
+            "product_rows": product_rows,
+            "category_rows": category_rows,
+            "best_category": best_category,
+            "recent_orders": page_obj.object_list,
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "pagination_query": query_params.urlencode(),
+            "chart_labels": json.dumps(day_labels),
+            "chart_sales": json.dumps(day_sales),
+            "category_labels": json.dumps(category_labels),
+            "category_values": json.dumps(category_values),
+        })
+        return ctx
 
 
 class QuickPOSProductListView(ListView):
-    model = QuickPOSProduct
+    model = POSProduct
     template_name = "costing/pos_products.html"
     context_object_name = "pos_products"
 
+    def get_queryset(self):
+        qs = POSProduct.objects.select_related("category").order_by("category__category_type", "name")
+        search = self.request.GET.get("search")
+        category = self.request.GET.get("category")
+        status = self.request.GET.get("status")
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(description__icontains=search))
+        if category:
+            qs = qs.filter(category_id=category)
+        if status == "active":
+            qs = qs.filter(is_active=True)
+        elif status == "inactive":
+            qs = qs.filter(is_active=False)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["product_form"] = POSProductForm()
+        ctx["category_form"] = POSCategoryForm()
+        ctx["categories"] = POSCategory.objects.all()
+        ctx["selected_category"] = self.request.GET.get("category", "")
+        ctx["selected_status"] = self.request.GET.get("status", "")
+        ctx["search"] = self.request.GET.get("search", "")
+        return ctx
+
 
 class QuickPOSProductCreateView(CreateView):
-    model = QuickPOSProduct
-    form_class = QuickPOSProductForm
+    model = POSProduct
+    form_class = POSProductForm
     template_name = "costing/pos_product_form.html"
     success_url = reverse_lazy("pos_products")
+
+    def form_valid(self, form):
+        messages.success(self.request, "POS product added.")
+        return super().form_valid(form)
 
 
 class QuickPOSProductUpdateView(UpdateView):
-    model = QuickPOSProduct
-    form_class = QuickPOSProductForm
+    model = POSProduct
+    form_class = POSProductForm
     template_name = "costing/pos_product_form.html"
     success_url = reverse_lazy("pos_products")
+
+    def form_valid(self, form):
+        messages.success(self.request, "POS product updated.")
+        return super().form_valid(form)
+
+
+class POSProductInlineCreateView(View):
+    def post(self, request):
+        form = POSProductForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "POS product added.")
+        else:
+            messages.error(request, "Could not add product. Please check the fields.")
+        return redirect("pos_products")
+
+
+class POSProductInlineUpdateView(View):
+    def post(self, request, pk):
+        product = get_object_or_404(POSProduct, pk=pk)
+        form = POSProductForm(request.POST, request.FILES, instance=product)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "POS product updated.")
+        else:
+            messages.error(request, "Could not update product. Please check the fields.")
+        return redirect("pos_products")
+
+
+class POSProductToggleView(View):
+    def post(self, request, pk):
+        product = get_object_or_404(POSProduct, pk=pk)
+        product.is_active = not product.is_active
+        product.save(update_fields=["is_active"])
+        messages.success(request, f"{product.name} is now {'active' if product.is_active else 'inactive'}.")
+        return redirect("pos_products")
+
+
+class POSProductDeleteView(DeleteView):
+    model = POSProduct
+    success_url = reverse_lazy("pos_products")
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        name = self.object.name
+        try:
+            self.object.delete()
+            messages.success(request, f"{name} deleted.")
+        except ProtectedError:
+            messages.error(request, f"{name} has sales history, so it was deactivated instead.")
+            self.object.is_active = False
+            self.object.save(update_fields=["is_active"])
+        return redirect(self.success_url)
+
+
+class POSCategoryCreateView(View):
+    def post(self, request):
+        form = POSCategoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "POS category added.")
+        else:
+            messages.error(request, "Could not add category. Please check the fields.")
+        return redirect("pos_products")
 
 
 class CreatePOSPriceSnapshotView(View):

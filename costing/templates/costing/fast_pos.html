@@ -1,96 +1,640 @@
 {% extends "costing/base.html" %}
 {% block content %}
-<div class="figma-dashboard">
+<div class="figma-dashboard pos-shell">
   <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
     <div>
-      <h1 class="page-title mb-1">Fast POS</h1>
-      <p class="page-subtitle mb-0">Tap bundle products, sell quickly, and monitor profit as material prices change.</p>
+      <h1 class="page-title mb-1">Point of Sale</h1>
+      <p class="page-subtitle mb-0">Counter ordering, payments, receipts, and the live drink queue.</p>
     </div>
-    <a href="{% url 'pos_products' %}" class="btn figma-log-btn"><i class="bi bi-sliders me-1"></i>Edit POS Products</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'pos_sales_dashboard' %}" class="btn figma-clear-btn"><i class="bi bi-bar-chart-line me-1"></i>Sales Dashboard</a>
+      <a href="{% url 'pos_products' %}" class="btn figma-log-btn"><i class="bi bi-sliders me-1"></i>Products</a>
+    </div>
   </div>
 
-  {% if low_margin_products %}
-    <div class="alert alert-warning rounded-4 shadow-sm">
-      <strong>Low margin review needed:</strong>
-      {% for p in low_margin_products %}
-        {{ p.name }}{% if not forloop.last %}, {% endif %}
-      {% endfor %}
-    </div>
-  {% endif %}
+  <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
 
-  <div class="figma-kpi-grid">
-    <div class="figma-kpi-card kpi-blue"><div class="figma-kpi-icon"><i class="bi bi-lightning-charge"></i></div><span>Active POS Products</span><strong>{{ pos_products|length }}</strong></div>
-    <div class="figma-kpi-card kpi-pink"><div class="figma-kpi-icon"><i class="bi bi-exclamation-triangle"></i></div><span>Low Margin Items</span><strong>{{ low_margin_products|length }}</strong></div>
-    <div class="figma-kpi-card kpi-yellow"><div class="figma-kpi-icon"><i class="bi bi-tags"></i></div><span>Best Use</span><strong>Walk-in</strong></div>
-    <div class="figma-kpi-card kpi-green"><div class="figma-kpi-icon"><i class="bi bi-cash-coin"></i></div><span>Mode</span><strong>Fast Counter</strong></div>
-  </div>
-
-  <div class="row g-4">
-    <div class="col-lg-8">
-      <div class="figma-card">
-        <h2>Quick Sell Buttons</h2>
-        <div class="row g-3">
-          {% for product in pos_products %}
-            <div class="col-md-6 col-xl-4">
-              <div class="pos-product-card border rounded-4 p-3 h-100 {% if product.is_low_margin %}border-warning bg-warning-subtle{% endif %}">
-                <div class="d-flex justify-content-between gap-2 mb-2">
-                  <div>
-                    <h5 class="fw-bold mb-1">{{ product.button_label|default:product.name }}</h5>
-                    <small class="text-muted">{{ product.bundle_quantity }} pcs / bundle</small>
-                  </div>
-                  <strong class="fs-5">₱{{ product.selling_price|floatformat:2 }}</strong>
-                </div>
-                <div class="small mb-2">
-                  <div>Cost: <strong>₱{{ product.estimated_cost|floatformat:2 }}</strong></div>
-                  <div>Profit: <strong>₱{{ product.estimated_profit|floatformat:2 }}</strong></div>
-                  <div>Margin: <strong>{{ product.estimated_margin|floatformat:1 }}%</strong> / Target {{ product.target_margin_percent|floatformat:0 }}%</div>
-                  {% if product.is_low_margin %}
-                    <div class="text-danger fw-bold mt-1">Suggested: ₱{{ product.recommended_price|floatformat:2 }}</div>
-                  {% endif %}
-                </div>
-                <form method="post" class="mt-3">
-                  {% csrf_token %}
-                  <input type="hidden" name="product_id" value="{{ product.id }}">
-                  <div class="row g-2">
-                    <div class="col-6"><input type="number" name="bundle_count" value="1" min="1" class="form-control" aria-label="Bundle count"></div>
-                    <div class="col-6">
-                      <select name="payment_method" class="form-select">
-                        <option>Cash</option><option>GCash</option><option>Bank Transfer</option>
-                      </select>
-                    </div>
-                    <div class="col-12"><input type="text" name="customer_name" class="form-control" placeholder="Customer name optional"></div>
-                    <div class="col-12"><button class="btn figma-log-btn w-100" type="submit"><i class="bi bi-cart-check me-1"></i>Sell Now</button></div>
-                  </div>
-                </form>
-              </div>
-            </div>
-          {% empty %}
-            <div class="col-12 text-center text-muted py-5">No POS products yet. Create your first POS product.</div>
-          {% endfor %}
+  <div class="pos-layout">
+    <section class="figma-card pos-counter">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <h2 class="mb-1">Counter</h2>
+          <div class="pos-customer-pill">Customer #<span id="customerNumber">{{ next_customer_number }}</span></div>
         </div>
+        <button class="btn figma-clear-btn" id="clearOrderBtn" type="button"><i class="bi bi-x-circle me-1"></i>Clear Order</button>
       </div>
-    </div>
-    <div class="col-lg-4">
-      <div class="figma-card mb-4">
-        <h2>How V3.7 protects profit</h2>
-        <p class="text-muted mb-2">Each button is linked to live Materials Master costs. If supplies increase, cost/margin updates automatically.</p>
-        <ul class="small text-muted mb-0">
-          <li>Edit material pack price monthly for inflation.</li>
-          <li>Use low-margin warning to adjust promos.</li>
-          <li>Save snapshots from POS Products for price history.</li>
-        </ul>
+
+      <div class="mb-3">
+        <label class="form-label fw-bold" for="customerNameInput">Customer Name</label>
+        <input type="text" id="customerNameInput" class="form-control" placeholder="Example: Yna, Miguel, Customer in green shirt">
       </div>
-      <div class="figma-card">
-        <h2>Recent POS Sales</h2>
-        {% for sale in recent_pos_sales %}
-          <div class="d-flex justify-content-between border-bottom py-2 small">
-            <span>{{ sale.order_name }}</span><strong>₱{{ sale.selling_price|floatformat:2 }}</strong>
+
+      <ul class="nav nav-pills pos-tabs" id="posCategoryTabs" role="tablist">
+        {% for group in product_groups %}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {% if forloop.first %}active{% endif %}" id="tab-{{ group.category.id }}" data-bs-toggle="pill" data-bs-target="#pane-{{ group.category.id }}" type="button" role="tab">
+              {{ group.category.name }}
+            </button>
+          </li>
+        {% endfor %}
+      </ul>
+
+      <div class="tab-content mt-3">
+        {% for group in product_groups %}
+          <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="pane-{{ group.category.id }}" role="tabpanel">
+            <div class="pos-product-grid">
+              {% for product in group.products %}
+                <button type="button"
+                        class="pos-product-button"
+                        data-product-id="{{ product.id }}"
+                        data-name="{{ product.name }}"
+                        data-price="{{ product.price }}"
+                        data-promo-qty="{{ product.promo_bundle_qty }}"
+                        data-promo-price="{{ product.promo_bundle_price }}"
+                        data-category="{{ product.category.category_type }}"
+                        data-allow-addons="{% if product.allow_addons %}true{% else %}false{% endif %}">
+                  <span>{{ product.name }}</span>
+                  <strong>&#8369;{{ product.price|floatformat:2 }}</strong>
+                  {% if product.promo_bundle_qty and product.promo_bundle_price %}
+                    <small>{{ product.promo_bundle_qty }} for &#8369;{{ product.promo_bundle_price|floatformat:2 }}</small>
+                  {% endif %}
+                </button>
+              {% endfor %}
+            </div>
           </div>
         {% empty %}
-          <p class="text-muted mb-0">No POS sales yet.</p>
+          <div class="text-center text-muted py-5">No active POS products yet. Add products from Product Management.</div>
         {% endfor %}
       </div>
-    </div>
+
+      {% if addons %}
+        <div class="pos-addon-bank mt-4">
+          <h3>Add-ons</h3>
+          <div class="d-flex gap-2 flex-wrap">
+            {% for addon in addons %}
+              <button type="button" class="btn btn-outline-primary pos-addon-button" data-addon-id="{{ addon.id }}" data-name="{{ addon.name }}" data-price="{{ addon.price }}">
+                {{ addon.name }} +&#8369;{{ addon.price|floatformat:2 }}
+              </button>
+            {% endfor %}
+          </div>
+          <small class="text-muted d-block mt-2">Tap an add-on after selecting a drink, or use the add-on controls inside each drink line.</small>
+        </div>
+      {% endif %}
+
+      <div class="pos-summary mt-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <h3>Order Summary</h3>
+          <span class="text-muted small" id="orderCount">0 items</span>
+        </div>
+
+        <div id="orderLines" class="pos-order-lines">
+          <div class="text-muted text-center py-4">Tap a product to start an order.</div>
+        </div>
+
+        <div class="pos-totals">
+          <div><span>Subtotal</span><strong id="subtotalText">&#8369;0.00</strong></div>
+          <div>
+            <span>Discount</span>
+            <input type="number" min="0" step="0.01" id="discountInput" class="form-control form-control-sm" placeholder="0.00" value="">
+          </div>
+          <div class="grand"><span>Grand Total</span><strong id="totalText">&#8369;0.00</strong></div>
+          <div>
+            <span>Payment Method</span>
+            <select id="paymentMethodInput" class="form-select">
+              <option value="Cash">Cash</option>
+              <option value="Online Payment">Online Payment</option>
+            </select>
+          </div>
+          <div>
+            <span>Cash Received</span>
+            <input type="number" min="0" step="0.01" id="cashInput" class="form-control" placeholder="0.00" value="">
+          </div>
+          <div id="amountDueRow" class="amount-due-row d-none"><span>Still Needed</span><strong id="amountDueText">&#8369;0.00</strong></div>
+          <div><span>Change</span><strong id="changeText">&#8369;0.00</strong></div>
+        </div>
+
+        <div class="pos-actions">
+          <button class="btn figma-log-btn" type="button" id="submitOrderBtn"><i class="bi bi-send me-1"></i>Submit Order</button>
+          <button class="btn btn-outline-secondary" type="button" id="printReceiptBtn" disabled><i class="bi bi-printer me-1"></i>Print Receipt</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="figma-card pos-queue">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+          <h2 class="mb-1">Drink Queue</h2>
+          <p class="text-muted mb-0">Only drink items appear here.</p>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm" id="refreshQueueBtn" type="button"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+
+      <div id="activeQueue" class="pos-queue-list">
+        {% for queue_item in active_queue %}
+          {% include "costing/partials/pos_queue_card.html" with queue_item=queue_item %}
+        {% empty %}
+          <div class="text-muted text-center py-4">No active drink orders.</div>
+        {% endfor %}
+      </div>
+
+      <h3 class="mt-4">Completed</h3>
+      <small class="text-muted d-block mb-2">Showing latest 5 completed drinks.</small>
+      <div id="completedQueue" class="pos-queue-list completed">
+        {% for queue_item in completed_queue %}
+          {% include "costing/partials/pos_queue_card.html" with queue_item=queue_item completed=True %}
+        {% empty %}
+          <div class="text-muted text-center py-3">No completed drinks yet.</div>
+        {% endfor %}
+      </div>
+    </aside>
   </div>
 </div>
+
+<div class="toast-ui-stack" id="posToastStack" aria-live="polite" aria-atomic="true"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const addons = [
+  {% for addon in addons %}
+    {id: {{ addon.id }}, name: "{{ addon.name|escapejs }}", price: Number("{{ addon.price }}")}{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+let cart = [];
+let selectedLineId = null;
+let lastReceiptUrl = "";
+
+const money = value => `&#8369;${Number(value || 0).toFixed(2)}`;
+const csrfToken = document.getElementById('csrfToken').value;
+let posToastTimer = null;
+
+function hidePOSToast() {
+  const stack = document.getElementById('posToastStack');
+  if (!stack) return;
+  stack.innerHTML = '';
+
+  if (posToastTimer) {
+    clearTimeout(posToastTimer);
+    posToastTimer = null;
+  }
+}
+
+function escapePOSToastText(value) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+
+  return String(value || '').replace(/[&<>"']/g, function (char) {
+    return map[char];
+  });
+}
+
+function showPOSToast(title, message, tone = 'warning') {
+  const stack = document.getElementById('posToastStack');
+  if (!stack) return;
+
+  const isDanger = tone === 'danger';
+  const isSuccess = tone === 'success';
+  const cardClass = isDanger ? 'toast-ui-warning' : isSuccess ? 'toast-ui-success' : 'toast-ui-warning';
+  const icon = isSuccess ? 'bi-check-lg' : 'bi-exclamation-lg';
+  const buttonClass = isSuccess ? 'toast-ui-confirm' : 'toast-ui-danger';
+
+  stack.innerHTML = `
+    <div class="toast-ui-card ${cardClass}" role="alert">
+      <div class="toast-ui-accent"></div>
+      <div class="toast-ui-icon"><i class="bi ${icon}"></i></div>
+      <div class="toast-ui-content">
+        <strong>${escapePOSToastText(title)}</strong>
+        <span>${escapePOSToastText(message)}</span>
+        <div class="toast-ui-actions">
+          <button type="button" class="btn ${buttonClass}" data-pos-toast-close>OK</button>
+        </div>
+      </div>
+      <button type="button" class="toast-ui-close" data-pos-toast-close aria-label="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+  `;
+
+  stack.querySelectorAll('[data-pos-toast-close]').forEach(button => {
+    button.addEventListener('click', hidePOSToast);
+  });
+
+  posToastTimer = setTimeout(hidePOSToast, 7000);
+}
+
+function itemBaseTotal(item) {
+  if (item.promoQty && item.promoPrice && item.quantity >= item.promoQty) {
+    return (
+      Math.floor(item.quantity / item.promoQty) * item.promoPrice
+    ) + (
+      (item.quantity % item.promoQty) * item.price
+    );
+  }
+
+  return item.price * item.quantity;
+}
+
+function lineKey(productId) {
+  return `${productId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function recalc() {
+  const subtotal = cart.reduce((sum, item) => {
+    const itemTotal = itemBaseTotal(item);
+    const addonTotal = item.addons.reduce((addonSum, addon) => {
+      return addonSum + addon.price * addon.quantity;
+    }, 0);
+
+    return sum + itemTotal + addonTotal;
+  }, 0);
+
+  const discount = Number(document.getElementById('discountInput').value || 0);
+  const total = Math.max(subtotal - discount, 0);
+  const paymentMethod = document.getElementById('paymentMethodInput').value;
+  const cashField = document.getElementById('cashInput');
+
+  if (paymentMethod === 'Online Payment') {
+    cashField.value = total.toFixed(2);
+    cashField.disabled = true;
+  } else {
+    cashField.disabled = false;
+  }
+
+  const cash = paymentMethod === 'Online Payment' ? total : Number(cashField.value || 0);
+  const shortfall = Math.max(total - cash, 0);
+  const amountDueRow = document.getElementById('amountDueRow');
+
+  document.getElementById('subtotalText').innerHTML = money(subtotal);
+  document.getElementById('totalText').innerHTML = money(total);
+  document.getElementById('changeText').innerHTML = money(Math.max(cash - total, 0));
+  document.getElementById('amountDueText').innerHTML = money(shortfall);
+
+  amountDueRow.classList.toggle(
+    'd-none',
+    !(paymentMethod === 'Cash' && shortfall > 0 && total > 0)
+  );
+
+  document.getElementById('orderCount').textContent = `${cart.reduce((sum, item) => sum + item.quantity, 0)} items`;
+
+  return {subtotal, discount, total, cash, shortfall};
+}
+
+function renderCart() {
+  const target = document.getElementById('orderLines');
+
+  if (!cart.length) {
+    target.innerHTML = '<div class="text-muted text-center py-4">Tap a product to start an order.</div>';
+    recalc();
+    return;
+  }
+
+  target.innerHTML = cart.map(item => `
+    <div class="pos-order-line ${selectedLineId === item.lineId ? 'selected' : ''}" data-line-id="${item.lineId}">
+      <div class="pos-line-main">
+        <button class="btn btn-sm btn-light select-line" type="button" data-line-id="${item.lineId}">
+          <i class="bi bi-dot"></i>
+        </button>
+
+        <div>
+          <strong>${item.name}</strong>
+          <span>${item.category === 'DRINK' ? 'Drink' : item.category}</span>
+
+          ${item.addons.map(addon => `
+            <small class="d-block text-primary mt-1">
+              + ${addon.quantity} ${addon.name}
+              <button class="btn btn-sm btn-outline-danger remove-addon ms-2"
+                      data-line-id="${item.lineId}"
+                      data-addon-id="${addon.product_id}"
+                      type="button">
+                <i class="bi bi-x"></i>
+              </button>
+            </small>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="pos-line-controls">
+        <button class="btn btn-sm btn-outline-secondary qty-minus" data-line-id="${item.lineId}" type="button">
+          <i class="bi bi-dash"></i>
+        </button>
+
+        <strong>${item.quantity}</strong>
+
+        <button class="btn btn-sm btn-outline-secondary qty-plus" data-line-id="${item.lineId}" type="button">
+          <i class="bi bi-plus"></i>
+        </button>
+
+        <span>${money(itemBaseTotal(item))}</span>
+
+        <button class="btn btn-sm btn-outline-danger remove-line" data-line-id="${item.lineId}" type="button">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+
+      ${item.allowAddons ? `
+        <div class="pos-line-addons">
+          ${addons.map(addon => `
+            <button class="btn btn-sm btn-outline-primary add-line-addon"
+                    data-line-id="${item.lineId}"
+                    data-addon-id="${addon.id}"
+                    type="button">
+              + ${addon.name}
+            </button>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+
+  recalc();
+}
+
+function addProduct(button) {
+  const product = {
+    lineId: lineKey(button.dataset.productId),
+    productId: Number(button.dataset.productId),
+    name: button.dataset.name,
+    price: Number(button.dataset.price),
+    promoQty: Number(button.dataset.promoQty || 0),
+    promoPrice: Number(button.dataset.promoPrice || 0),
+    category: button.dataset.category,
+    allowAddons: button.dataset.allowAddons === 'true',
+    quantity: 1,
+    addons: []
+  };
+
+  cart.push(product);
+  selectedLineId = product.lineId;
+  renderCart();
+}
+
+function addAddonToLine(lineId, addonId) {
+  const line = cart.find(item => item.lineId === lineId);
+  const addon = addons.find(item => item.id === Number(addonId));
+
+  if (!line || !addon || !line.allowAddons) return;
+
+  const existing = line.addons.find(item => item.product_id === addon.id);
+
+  if (existing) {
+    existing.quantity += line.quantity;
+  } else {
+    line.addons.push({
+      product_id: addon.id,
+      name: addon.name,
+      price: addon.price,
+      quantity: line.quantity
+    });
+  }
+
+  renderCart();
+}
+
+document.querySelectorAll('.pos-product-button').forEach(button => {
+  button.addEventListener('click', () => addProduct(button));
+});
+
+document.querySelectorAll('.pos-addon-button').forEach(button => {
+  button.addEventListener('click', () => {
+    const targetLine = cart.find(item => item.lineId === selectedLineId && item.allowAddons)
+      || [...cart].reverse().find(item => item.allowAddons);
+
+    if (targetLine) {
+      addAddonToLine(targetLine.lineId, button.dataset.addonId);
+    }
+  });
+});
+
+document.getElementById('orderLines').addEventListener('click', event => {
+  const lineId = event.target.closest('[data-line-id]')?.dataset.lineId;
+  if (!lineId) return;
+
+  const line = cart.find(item => item.lineId === lineId);
+
+  if (event.target.closest('.select-line')) {
+    selectedLineId = lineId;
+  }
+
+  if (event.target.closest('.qty-minus') && line) {
+    line.quantity = Math.max(line.quantity - 1, 1);
+  }
+
+  if (event.target.closest('.qty-plus') && line) {
+    line.quantity += 1;
+  }
+
+  if (event.target.closest('.remove-line')) {
+    cart = cart.filter(item => item.lineId !== lineId);
+
+    if (selectedLineId === lineId) {
+      selectedLineId = cart.length ? cart[cart.length - 1].lineId : null;
+    }
+
+    renderCart();
+    return;
+  }
+
+  const removeAddonButton = event.target.closest('.remove-addon');
+
+  if (removeAddonButton && line) {
+    line.addons = line.addons.filter(
+      addon => addon.product_id !== Number(removeAddonButton.dataset.addonId)
+    );
+  }
+
+  const addonButton = event.target.closest('.add-line-addon');
+
+  if (addonButton) {
+    addAddonToLine(lineId, addonButton.dataset.addonId);
+    return;
+  }
+
+  renderCart();
+});
+
+document.getElementById('discountInput').addEventListener('input', recalc);
+document.getElementById('cashInput').addEventListener('input', recalc);
+
+document.getElementById('paymentMethodInput').addEventListener('change', () => {
+  const cashField = document.getElementById('cashInput');
+
+  if (document.getElementById('paymentMethodInput').value === 'Cash') {
+    cashField.disabled = false;
+    cashField.value = "";
+    cashField.focus();
+  }
+
+  recalc();
+});
+
+document.getElementById('clearOrderBtn').addEventListener('click', () => {
+  cart = [];
+  selectedLineId = null;
+  lastReceiptUrl = "";
+
+  document.getElementById('printReceiptBtn').disabled = true;
+  document.getElementById('cashInput').value = "0.00";
+  document.getElementById('cashInput').disabled = false;
+  document.getElementById('discountInput').value = "0.00";
+  document.getElementById('paymentMethodInput').value = "Cash";
+  document.getElementById('customerNameInput').value = "";
+
+  renderCart();
+});
+
+async function completeOrder() {
+  if (!cart.length) {
+    showPOSToast("No items yet", "Tap at least one product before submitting an order.");
+    return;
+  }
+
+  const totals = recalc();
+  const paymentMethod = document.getElementById('paymentMethodInput').value;
+
+  if (paymentMethod === 'Cash' && totals.cash < totals.total) {
+    showPOSToast(
+      "Payment needed",
+      `Kulang pa ng ${money(totals.shortfall).replace('&#8369;', '₱')}. Please collect the remaining balance before submitting.`
+    );
+    return;
+  }
+
+  const payload = {
+    customer_name: document.getElementById('customerNameInput').value,
+    payment_method: paymentMethod,
+    discount_amount: totals.discount,
+    cash_received: totals.cash,
+    items: cart.map(item => ({
+      product_id: item.productId,
+      quantity: item.quantity,
+      addons: item.addons.map(addon => ({
+        product_id: addon.product_id,
+        quantity: addon.quantity
+      }))
+    }))
+  };
+
+  const response = await fetch("{% url 'pos_order_create' %}", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrfToken
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+
+  if (!data.ok) {
+    showPOSToast("Order not submitted", data.error || "Could not save order.", "danger");
+    return;
+  }
+
+  lastReceiptUrl = data.receipt_url;
+
+  document.getElementById('printReceiptBtn').disabled = false;
+  document.getElementById('customerNumber').textContent = data.next_customer_number;
+  document.getElementById('customerNameInput').value = "";
+  document.getElementById('paymentMethodInput').value = "Cash";
+  document.getElementById('cashInput').value = "0.00";
+  document.getElementById('cashInput').disabled = false;
+
+  cart = [];
+  selectedLineId = null;
+
+  renderCart();
+  refreshQueue();
+
+  showPOSToast("Order submitted", `Receipt ${data.order_number} is ready to print.`, "success");
+}
+
+document.getElementById('submitOrderBtn').addEventListener('click', completeOrder);
+
+document.getElementById('printReceiptBtn').addEventListener('click', () => {
+  if (lastReceiptUrl) window.open(lastReceiptUrl, '_blank');
+});
+
+function statusBadge(status) {
+  const map = {
+    Pending: 'text-bg-secondary',
+    Preparing: 'text-bg-warning',
+    Ready: 'text-bg-success',
+    Completed: 'text-bg-dark'
+  };
+
+  return map[status] || 'text-bg-secondary';
+}
+
+function queueCard(item, completed = false) {
+  const addons = item.addons.length
+    ? item.addons.map(addon => `<small class="d-block">+ ${addon.quantity} ${addon.name}</small>`).join('')
+    : '<small class="text-muted">No add-ons</small>';
+
+  const actions = completed ? '' : `
+    <div class="d-flex gap-2 flex-wrap mt-3">
+      <button class="btn btn-sm btn-outline-warning queue-status" data-id="${item.id}" data-status="Preparing">Start Preparing</button>
+      <button class="btn btn-sm btn-outline-success queue-status" data-id="${item.id}" data-status="Ready">Mark Ready</button>
+      <button class="btn btn-sm btn-outline-dark queue-status" data-id="${item.id}" data-status="Completed">Mark Completed</button>
+    </div>
+  `;
+
+  return `
+    <div class="pos-queue-card">
+      <div class="d-flex justify-content-between gap-2">
+        <strong>${item.customer_name ? item.customer_name : `Customer #${item.customer_number}`}</strong>
+        <span class="badge ${statusBadge(item.status)}">${item.status}</span>
+      </div>
+      <div class="mt-2">${item.quantity} x ${item.drink}</div>
+      <div>${addons}</div>
+      <small class="text-muted">Customer #${item.customer_number} &bull; ${item.time_ordered} &bull; ${item.order_number}</small>
+      ${actions}
+    </div>
+  `;
+}
+
+async function updateQueueStatus(id, status) {
+  const formData = new FormData();
+  formData.append('status', status);
+
+  await fetch(`/pos/queue/${id}/status/`, {
+    method: "POST",
+    headers: {"X-CSRFToken": csrfToken},
+    body: formData
+  });
+
+  refreshQueue();
+}
+
+async function refreshQueue() {
+  const response = await fetch("{% url 'pos_queue_data' %}");
+  const data = await response.json();
+
+  document.getElementById('activeQueue').innerHTML = data.active.length
+    ? data.active.map(item => queueCard(item)).join('')
+    : '<div class="text-muted text-center py-4">No active drink orders.</div>';
+
+  document.getElementById('completedQueue').innerHTML = data.completed.length
+    ? data.completed.map(item => queueCard(item, true)).join('')
+    : '<div class="text-muted text-center py-3">No completed drinks yet.</div>';
+}
+
+document.getElementById('refreshQueueBtn').addEventListener('click', refreshQueue);
+
+document.querySelector('.pos-queue').addEventListener('click', event => {
+  const button = event.target.closest('.queue-status');
+
+  if (button) {
+    updateQueueStatus(button.dataset.id, button.dataset.status);
+  }
+});
+
+setInterval(refreshQueue, 6000);
+renderCart();
+</script>
 {% endblock %}

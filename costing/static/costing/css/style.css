@@ -7,6 +7,298 @@
   --text:#08233f;
 }
 
+/* Full POS module */
+.pos-layout{
+  display:grid;
+  grid-template-columns:minmax(0, 1.45fr) minmax(340px, .8fr);
+  gap:24px;
+  align-items:start;
+}
+
+.pos-counter,
+.pos-queue{
+  border-radius:8px;
+}
+
+.pos-customer-pill{
+  display:inline-flex;
+  align-items:center;
+  min-height:34px;
+  padding:6px 12px;
+  border-radius:999px;
+  background:#eef6ff;
+  color:#0d3f78;
+  font-weight:900;
+}
+
+.pos-tabs{
+  gap:8px;
+}
+
+.pos-tabs .nav-link{
+  border:1px solid #d9e4ef;
+  color:#183153;
+  font-weight:900;
+}
+
+.pos-tabs .nav-link.active{
+  background:#183153;
+  border-color:#183153;
+}
+
+.pos-product-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(160px, 1fr));
+  gap:12px;
+}
+
+.pos-product-button{
+  min-height:116px;
+  border:1px solid #d9e4ef;
+  background:#fff;
+  border-radius:8px;
+  padding:14px;
+  text-align:left;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  transition:.16s ease;
+}
+
+.pos-product-button:hover{
+  border-color:#4b9be8;
+  box-shadow:0 10px 22px rgba(75,155,232,.16);
+  transform:translateY(-1px);
+}
+
+.pos-product-button span{
+  font-weight:900;
+  color:#102033;
+  line-height:1.2;
+}
+
+.pos-product-button strong{
+  color:#087f68;
+  font-size:20px;
+}
+
+.pos-product-button small{
+  color:#64748b;
+  font-weight:800;
+}
+
+.pos-addon-bank h3,
+.pos-summary h3,
+.pos-queue h3{
+  font-size:16px;
+  font-weight:900;
+  color:#102033;
+}
+
+.pos-order-lines{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+
+.pos-order-line{
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  padding:12px;
+  background:#fbfdff;
+}
+
+.pos-order-line.selected{
+  border-color:#4b9be8;
+  background:#eef6ff;
+}
+
+.pos-line-main,
+.pos-line-controls{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.pos-line-main{
+  justify-content:flex-start;
+}
+
+.pos-line-main span{
+  display:block;
+  font-size:12px;
+  color:#64748b;
+  font-weight:800;
+}
+
+.pos-line-controls{
+  margin-top:10px;
+  flex-wrap:wrap;
+}
+
+.pos-line-controls span{
+  min-width:82px;
+  text-align:right;
+  font-weight:900;
+}
+
+.pos-line-addons{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px dashed #cbd5e1;
+}
+
+.pos-totals{
+  display:grid;
+  gap:10px;
+  margin-top:18px;
+  padding-top:16px;
+  border-top:1px solid #e2e8f0;
+}
+
+.pos-totals > div{
+  display:grid;
+  grid-template-columns:1fr minmax(130px, auto);
+  align-items:center;
+  gap:12px;
+}
+
+.pos-totals span{
+  color:#64748b;
+  font-weight:900;
+}
+
+.pos-totals strong{
+  text-align:right;
+  color:#102033;
+  font-size:18px;
+}
+
+.pos-totals .grand strong{
+  font-size:28px;
+  color:#087f68;
+}
+
+.pos-totals .amount-due-row span,
+.pos-totals .amount-due-row strong{
+  color:#dc2626;
+}
+
+.pos-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:10px;
+  margin-top:18px;
+}
+
+.pos-queue-list{
+  display:grid;
+  gap:12px;
+}
+
+.pos-queue-card{
+  border:1px solid #e2e8f0;
+  border-left:5px solid #4b9be8;
+  border-radius:8px;
+  padding:14px;
+  background:#fff;
+  box-shadow:0 8px 18px rgba(15,23,42,.04);
+}
+
+.pos-queue-list.completed .pos-queue-card{
+  opacity:.78;
+  border-left-color:#64748b;
+}
+
+.pos-products-table th{
+  color:#64748b;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.pos-receipt-page{
+  display:grid;
+  justify-items:center;
+  gap:18px;
+}
+
+.receipt-paper{
+  width:min(420px, 100%);
+  background:#fff;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  padding:26px;
+  color:#111827;
+  box-shadow:0 14px 35px rgba(15,23,42,.08);
+}
+
+.receipt-paper h1{
+  font-size:22px;
+  font-weight:900;
+}
+
+.receipt-meta div,
+.receipt-line,
+.receipt-totals div{
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+}
+
+.receipt-line{
+  align-items:flex-start;
+  padding:7px 0;
+}
+
+.receipt-line small{
+  display:block;
+  color:#64748b;
+}
+
+.receipt-totals{
+  display:grid;
+  gap:8px;
+}
+
+.receipt-totals .grand{
+  font-size:20px;
+  font-weight:900;
+}
+
+@media (max-width: 1100px){
+  .pos-layout{
+    grid-template-columns:1fr;
+  }
+
+  .pos-actions{
+    grid-template-columns:1fr;
+  }
+}
+
+@media print{
+  .sidebar,
+  .mobile-topbar,
+  .receipt-actions,
+  .v4-tour-fab,
+  .toast-container{
+    display:none !important;
+  }
+
+  .main-content{
+    padding:0 !important;
+  }
+
+  .receipt-paper{
+    box-shadow:none;
+    border:0;
+  }
+}
+
 /* BASE */
 *{
   box-sizing:border-box;
@@ -2817,6 +3109,18 @@ table.dataTable td:last-child{
   color:#ffffff;
 }
 
+.toast-ui-confirm{
+  background:#087f68;
+  border:1px solid #087f68;
+  color:#ffffff;
+}
+
+.toast-ui-confirm:hover{
+  background:#066b58;
+  border-color:#066b58;
+  color:#ffffff;
+}
+
 .toast-ui-close{
   margin:14px 10px 0 0;
   width:26px;
@@ -2838,6 +3142,11 @@ table.dataTable td:last-child{
 .toast-ui-warning .toast-ui-accent,
 .toast-ui-warning .toast-ui-icon{
   background:#fbbf24;
+}
+
+.toast-ui-success .toast-ui-accent,
+.toast-ui-success .toast-ui-icon{
+  background:#087f68;
 }
 
 @keyframes toastUiIn{
@@ -3498,4 +3807,51 @@ select{
   .toast-ui-actions .btn{
     width:100%;
   }
+}
+.pos-totals {
+    margin-top: 1.25rem;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 1rem;
+}
+
+.pos-totals > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.pos-totals > div > span {
+    flex: 1;
+    font-weight: 700;
+    color: #64748b;
+}
+
+.pos-totals > div > strong,
+.pos-totals > div > input,
+.pos-totals > div > select {
+    width: 220px !important;
+    min-width: 220px;
+    max-width: 220px;
+}
+
+.pos-totals > div > strong {
+    display: block;
+    text-align: right;
+    font-weight: 800;
+}
+
+.pos-totals > div > input {
+    text-align: right;
+}
+
+.pos-totals .grand strong {
+    font-size: 2rem;
+    color: #00856f;
+}
+
+.amount-due-row span,
+.amount-due-row strong {
+    color: red;
 }

@@ -1,0 +1,24 @@
+<div class="pos-queue-card">
+  <div class="d-flex justify-content-between gap-2">
+    <strong>{{ queue_item.order.customer_name|default:"Customer #" }}{% if not queue_item.order.customer_name %}{{ queue_item.order.customer_number }}{% endif %}</strong>
+    <span class="badge {% if queue_item.status == 'Ready' %}text-bg-success{% elif queue_item.status == 'Preparing' %}text-bg-warning{% elif queue_item.status == 'Completed' %}text-bg-dark{% else %}text-bg-secondary{% endif %}">
+      {{ queue_item.status }}
+    </span>
+  </div>
+  <div class="mt-2">{{ queue_item.order_item.quantity }} x {{ queue_item.order_item.product_name }}</div>
+  <div>
+    {% for addon in queue_item.order_item.addons.all %}
+      <small class="d-block">+ {{ addon.quantity }} {{ addon.addon_name }}</small>
+    {% empty %}
+      <small class="text-muted">No add-ons</small>
+    {% endfor %}
+  </div>
+  <small class="text-muted">Customer #{{ queue_item.order.customer_number }} &bull; {{ queue_item.queued_at|date:"g:i A" }} &bull; {{ queue_item.order.order_number }}</small>
+  {% if not completed %}
+    <div class="d-flex gap-2 flex-wrap mt-3">
+      <button class="btn btn-sm btn-outline-warning queue-status" data-id="{{ queue_item.id }}" data-status="Preparing">Start Preparing</button>
+      <button class="btn btn-sm btn-outline-success queue-status" data-id="{{ queue_item.id }}" data-status="Ready">Mark Ready</button>
+      <button class="btn btn-sm btn-outline-dark queue-status" data-id="{{ queue_item.id }}" data-status="Completed">Mark Completed</button>
+    </div>
+  {% endif %}
+</div>

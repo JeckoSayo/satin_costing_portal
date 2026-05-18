@@ -1,0 +1,162 @@
+{% extends "costing/base.html" %}
+
+{% block content %}
+<div class="receipt-page">
+  <div class="receipt-wrapper">
+    <div class="receipt-card acknowledgement-receipt" id="printArea">
+      <div class="receipt-brand-row">
+        <div class="receipt-brand-copy">
+          <h1>Satin Creative Studio</h1>
+          <p>Point of Sale | {{ order.order_number }}</p>
+        </div>
+      </div>
+
+      <h2 class="receipt-title">ACKNOWLEDGEMENT RECEIPT</h2>
+
+      <div class="receipt-info-lines">
+        <div class="receipt-line-pair">
+          <div class="receipt-fill-line">
+            <span>SOLD TO:</span>
+            <strong>{{ order.customer_name|default:"Walk-in Customer" }}</strong>
+          </div>
+          <div class="receipt-fill-line receipt-date-line">
+            <span>DATE:</span>
+            <strong>{{ order.created_at|date:"m/d/Y" }}</strong>
+          </div>
+        </div>
+        <div class="receipt-fill-line">
+          <span>CUSTOMER NO.:</span>
+          <strong>#{{ order.customer_number }}</strong>
+        </div>
+        <div class="receipt-fill-line">
+          <span>PAYMENT:</span>
+          <strong>{{ order.payment_method }}</strong>
+        </div>
+      </div>
+
+      <table class="ack-table">
+        <thead>
+          <tr>
+            <th class="ack-qty">QTY</th>
+            <th>DESCRIPTION</th>
+            <th class="ack-price">PRICE</th>
+            <th class="ack-amount">AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in order.items.all %}
+            <tr>
+              <td class="text-center">{{ item.quantity }}</td>
+              <td>
+                {{ item.product_name|default:"Item" }}
+              </td>
+              <td class="text-end">&#8369;{{ item.unit_price|floatformat:0 }}</td>
+              <td class="text-end">&#8369;{{ item.line_total|floatformat:0 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center receipt-muted">No items</td>
+            </tr>
+          {% endfor %}
+
+          {% for addon in order.items.all %}
+            {% for order_addon in addon.addons.all %}
+              <tr>
+                <td class="text-center">{{ order_addon.quantity }}</td>
+                <td>{{ order_addon.addon_name }}</td>
+                <td class="text-end">&#8369;{{ order_addon.price|floatformat:0 }}</td>
+                <td class="text-end">&#8369;{{ order_addon.line_total|floatformat:0 }}</td>
+              </tr>
+            {% endfor %}
+          {% endfor %}
+
+          {% for _ in "123456" %}
+            <tr class="ack-empty-row">
+              <td>&nbsp;</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          {% endfor %}
+
+          {% if order.discount_amount %}
+            <tr>
+              <td colspan="3" class="text-end">DISCOUNT:</td>
+              <td class="text-end">&#8369;{{ order.discount_amount|floatformat:0 }}</td>
+            </tr>
+          {% endif %}
+          <tr class="ack-total-row">
+            <td colspan="3" class="text-end">TOTAL:</td>
+            <td class="text-end">&#8369;{{ order.total_amount|floatformat:0 }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="receipt-reference-row">
+        <span>Receipt #: {{ order.order_number }}</span>
+        <span>Cash: &#8369;{{ order.cash_received|floatformat:0 }}</span>
+        <span>Change: &#8369;{{ order.change_amount|floatformat:0 }}</span>
+      </div>
+    </div>
+
+    <div class="text-center mt-4 no-print">
+      <button onclick="window.print()" class="btn btn-primary px-4">
+        <i class="bi bi-printer me-1"></i>
+        Print Receipt
+      </button>
+
+      <button type="button" onclick="downloadReceiptPng(this)" class="btn btn-success px-4 ms-2">
+        <i class="bi bi-download me-1"></i>
+        Download PNG
+      </button>
+
+      <a href="{% url 'fast_pos' %}" class="btn btn-outline-secondary px-4 ms-2">
+        Back
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+async function downloadReceiptPng(button) {
+  const receipt = document.getElementById("printArea");
+  if (!receipt || !window.html2canvas) {
+    alert("Receipt PNG export is not ready. Please check your internet connection and try again.");
+    return;
+  }
+
+  const originalText = button ? button.innerHTML : "";
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing PNG';
+  }
+
+  try {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+    const canvas = await html2canvas(receipt, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      logging: false
+    });
+    const link = document.createElement("a");
+    link.download = "receipt-{{ order.order_number|default:order.id }}.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  } catch (error) {
+    console.error("Receipt PNG export failed:", error);
+    alert("Could not download the receipt PNG. Please try again.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalText;
+    }
+  }
+}
+</script>
+{% endblock %}

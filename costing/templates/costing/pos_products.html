@@ -1,27 +1,96 @@
 {% extends "costing/base.html" %}
 {% block content %}
 <div class="figma-dashboard pos-products-page">
-  <div class="figma-page-head pos-products-head d-flex justify-content-between align-items-start gap-3">
-    <div><h1 class="page-title mb-1">POS Products</h1><p class="page-subtitle mb-0">Edit 4-for-100, 3-for-100, photo prints, and other fast counter buttons.</p></div>
-    <div class="pos-products-actions d-flex gap-2"><a href="{% url 'fast_pos' %}" class="btn figma-clear-btn">Back to POS</a><a href="{% url 'pos_product_add' %}" class="btn figma-log-btn">Add POS Product</a></div>
+  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+    <div>
+      <h1 class="page-title mb-1">POS Product Management</h1>
+      <p class="page-subtitle mb-0">Manage drinks, stickers, cookies, add-ons, promos, prices, and active status.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'fast_pos' %}" class="btn figma-clear-btn">Back to POS</a>
+      <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#categoryModal">Add Category</button>
+      <button class="btn figma-log-btn" data-bs-toggle="modal" data-bs-target="#productModal">Add Product</button>
+    </div>
   </div>
+
+  <div class="figma-card mb-4">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label fw-bold">Search</label>
+        <input class="form-control" name="search" value="{{ search }}" placeholder="Product name or description">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Category</label>
+        <select class="form-select" name="category">
+          <option value="">All categories</option>
+          {% for category in categories %}
+            <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-bold">Status</label>
+        <select class="form-select" name="status">
+          <option value="">All</option>
+          <option value="active" {% if selected_status == "active" %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if selected_status == "inactive" %}selected{% endif %}>Inactive</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn figma-log-btn w-100">Filter</button>
+      </div>
+    </form>
+  </div>
+
   <div class="figma-card">
     <div class="table-responsive">
       <table class="table align-middle pos-products-table">
-        <thead><tr><th>Button</th><th>Material</th><th class="text-end">Price</th><th class="text-end">Cost</th><th class="text-end">Profit</th><th class="text-end">Margin</th><th>Status</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th class="text-end">Price</th>
+            <th class="text-end">Cost</th>
+            <th>Add-ons</th>
+            <th>Promo</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
         <tbody>
           {% for p in pos_products %}
             <tr>
-              <td><strong>{{ p.button_label|default:p.name }}</strong><br><small class="text-muted">{{ p.bundle_quantity }} pcs / bundle</small></td>
-              <td>{{ p.main_material|default:"No material" }}</td>
-              <td class="text-end">₱{{ p.selling_price|floatformat:2 }}</td>
-              <td class="text-end">₱{{ p.estimated_cost|floatformat:2 }}</td>
-              <td class="text-end">₱{{ p.estimated_profit|floatformat:2 }}</td>
-              <td class="text-end">{{ p.estimated_margin|floatformat:1 }}%</td>
-              <td>{% if p.is_low_margin %}<span class="badge text-bg-warning">Review: ₱{{ p.recommended_price|floatformat:2 }}</span>{% else %}<span class="badge text-bg-success">Healthy</span>{% endif %}</td>
+              <td><strong>{{ p.name }}</strong><br><small class="text-muted">{{ p.description|default:"No description"|truncatechars:48 }}</small></td>
+              <td>{{ p.category.name }}</td>
+              <td class="text-end">&#8369;{{ p.price|floatformat:2 }}</td>
+              <td class="text-end">&#8369;{{ p.cost|floatformat:2 }}</td>
+              <td>{% if p.allow_addons %}<span class="badge text-bg-primary">Allowed</span>{% else %}<span class="text-muted">No</span>{% endif %}</td>
+              <td>
+                {% if p.promo_bundle_qty and p.promo_bundle_price %}
+                  {{ p.promo_bundle_qty }} for &#8369;{{ p.promo_bundle_price|floatformat:2 }}
+                {% else %}
+                  <span class="text-muted">None</span>
+                {% endif %}
+              </td>
+              <td>{% if p.is_active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif %}</td>
               <td class="text-end">
-                <form action="{% url 'pos_product_snapshot' p.id %}" method="post" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Snapshot</button></form>
-                <a href="{% url 'pos_product_edit' p.id %}" class="btn btn-sm btn-primary">Edit</a>
+                <div class="d-flex justify-content-end gap-1">
+                  <button class="btn btn-sm btn-primary action-icon-btn" data-bs-toggle="modal" data-bs-target="#editProduct{{ p.id }}" title="Edit" aria-label="Edit {{ p.name }}">
+                    <i class="bi bi-pencil-square"></i>
+                  </button>
+                  <form action="{% url 'pos_product_toggle' p.id %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-secondary action-icon-btn" title="{% if p.is_active %}Deactivate{% else %}Activate{% endif %}" aria-label="{% if p.is_active %}Deactivate{% else %}Activate{% endif %} {{ p.name }}">
+                      <i class="bi {% if p.is_active %}bi-toggle-on{% else %}bi-toggle-off{% endif %}"></i>
+                    </button>
+                  </form>
+                  <form action="{% url 'pos_product_delete' p.id %}" method="post" class="d-inline" onsubmit="return confirm('Delete {{ p.name|escapejs }}? Products with sales history will be deactivated instead.');">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-danger action-icon-btn" title="Delete" aria-label="Delete {{ p.name }}">
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           {% empty %}
@@ -32,4 +101,58 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="post" action="{% url 'pos_product_quick_add' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Add POS Product</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">{% for field in product_form %}<div class="col-md-6 {% if field.name == 'description' %}col-12{% endif %}"><label class="form-label fw-bold">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}</div></div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn figma-log-btn">Save Product</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="categoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url 'pos_category_add' %}">
+        {% csrf_token %}
+        <div class="modal-header"><h5 class="modal-title">Add POS Category</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">{% for field in category_form %}<div class="col-12"><label class="form-label fw-bold">{{ field.label }}</label>{{ field }}</div>{% endfor %}</div></div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn figma-log-btn">Save Category</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% for p in pos_products %}
+  <div class="modal fade" id="editProduct{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <form method="post" action="{% url 'pos_product_quick_edit' p.id %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="modal-header"><h5 class="modal-title">Edit {{ p.name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label fw-bold">Category</label><select class="form-select" name="category">{% for category in categories %}<option value="{{ category.id }}" {% if p.category_id == category.id %}selected{% endif %}>{{ category.name }}</option>{% endfor %}</select></div>
+              <div class="col-md-6"><label class="form-label fw-bold">Product Name</label><input class="form-control" name="name" value="{{ p.name }}"></div>
+              <div class="col-md-6"><label class="form-label fw-bold">Price</label><input class="form-control" type="number" step="0.01" name="price" value="{{ p.price }}"></div>
+              <div class="col-md-6"><label class="form-label fw-bold">Cost</label><input class="form-control" type="number" step="0.01" name="cost" value="{{ p.cost }}"></div>
+              <div class="col-12"><label class="form-label fw-bold">Description</label><textarea class="form-control" name="description" rows="3">{{ p.description }}</textarea></div>
+              <div class="col-md-6"><label class="form-label fw-bold">Image</label><input class="form-control" type="file" name="image"></div>
+              <div class="col-md-3"><label class="form-label fw-bold">Bundle Qty</label><input class="form-control" type="number" min="0" name="promo_bundle_qty" value="{{ p.promo_bundle_qty }}"></div>
+              <div class="col-md-3"><label class="form-label fw-bold">Bundle Price</label><input class="form-control" type="number" step="0.01" name="promo_bundle_price" value="{{ p.promo_bundle_price }}"></div>
+              <div class="col-md-6"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="is_active" id="active{{ p.id }}" {% if p.is_active %}checked{% endif %}><label class="form-check-label" for="active{{ p.id }}">Active</label></div></div>
+              <div class="col-md-6"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="allow_addons" id="addons{{ p.id }}" {% if p.allow_addons %}checked{% endif %}><label class="form-check-label" for="addons{{ p.id }}">Allow Add-ons</label></div></div>
+            </div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button class="btn figma-log-btn">Save Changes</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endfor %}
 {% endblock %}

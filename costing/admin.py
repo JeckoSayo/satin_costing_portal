@@ -114,7 +114,7 @@ class ShopTaskAdmin(admin.ModelAdmin):
     search_fields = ("title", "notes", "related_sale__receipt_number")
 
 try:
-    from .models import QuickPOSProduct, QuickPOSPriceSnapshot
+    from .models import QuickPOSProduct, QuickPOSPriceSnapshot, POSCategory, POSProduct, POSOrder, POSOrderItem, POSOrderItemAddon, POSQueueItem
 
     @admin.register(QuickPOSProduct)
     class QuickPOSProductAdmin(admin.ModelAdmin):
@@ -128,6 +128,48 @@ try:
         list_display = ("product", "snapshot_date", "selling_price", "estimated_cost", "estimated_margin")
         list_filter = ("snapshot_date",)
         search_fields = ("product__name",)
+
+    @admin.register(POSCategory)
+    class POSCategoryAdmin(admin.ModelAdmin):
+        list_display = ("name", "category_type", "is_active")
+        list_filter = ("category_type", "is_active")
+        search_fields = ("name",)
+
+    @admin.register(POSProduct)
+    class POSProductAdmin(admin.ModelAdmin):
+        list_display = ("name", "category", "price", "cost", "allow_addons", "is_active")
+        list_filter = ("category__category_type", "is_active", "allow_addons")
+        search_fields = ("name", "description")
+
+    class POSOrderItemAddonInline(admin.TabularInline):
+        model = POSOrderItemAddon
+        extra = 0
+
+    class POSOrderItemInline(admin.TabularInline):
+        model = POSOrderItem
+        extra = 0
+        readonly_fields = ("product_name", "category_name", "category_type", "line_total", "line_cost", "line_profit")
+
+    @admin.register(POSOrder)
+    class POSOrderAdmin(admin.ModelAdmin):
+        list_display = ("order_number", "customer_number", "customer_name", "created_at", "total_amount", "payment_method", "cash_received", "change_amount", "payment_status")
+        list_filter = ("payment_method", "payment_status", "created_at")
+        search_fields = ("order_number", "customer_name")
+        readonly_fields = ("order_number", "created_at")
+        inlines = [POSOrderItemInline]
+
+    @admin.register(POSOrderItem)
+    class POSOrderItemAdmin(admin.ModelAdmin):
+        list_display = ("order", "product_name", "category_type", "quantity", "line_total", "line_profit")
+        list_filter = ("category_type",)
+        search_fields = ("order__order_number", "product_name")
+        inlines = [POSOrderItemAddonInline]
+
+    @admin.register(POSQueueItem)
+    class POSQueueItemAdmin(admin.ModelAdmin):
+        list_display = ("order", "order_item", "status", "queued_at", "started_at", "ready_at", "completed_at")
+        list_filter = ("status", "queued_at")
+        search_fields = ("order__order_number", "order_item__product_name")
 except Exception:
     pass
 

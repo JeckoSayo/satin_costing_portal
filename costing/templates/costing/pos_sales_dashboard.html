@@ -1,0 +1,157 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="analytics-shell pos-analytics">
+  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+    <div>
+      <h1 class="page-title mb-1">POS Sales Dashboard</h1>
+      <p class="page-subtitle mb-0">Daily, weekly, monthly, yearly, and custom sales performance.</p>
+    </div>
+    <a href="{% url 'fast_pos' %}" class="btn figma-log-btn">Back to POS</a>
+  </div>
+
+  <div class="figma-card mb-4">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Period</label>
+        <select class="form-select" name="period">
+          <option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
+          <option value="week" {% if period == "week" %}selected{% endif %}>This Week</option>
+          <option value="month" {% if period == "month" %}selected{% endif %}>This Month</option>
+          <option value="year" {% if period == "year" %}selected{% endif %}>This Year</option>
+          <option value="custom" {% if period == "custom" %}selected{% endif %}>Custom Date Range</option>
+        </select>
+      </div>
+      <div class="col-md-3"><label class="form-label fw-bold">Start</label><input class="form-control" type="date" name="start" value="{{ start|date:'Y-m-d' }}"></div>
+      <div class="col-md-3"><label class="form-label fw-bold">End</label><input class="form-control" type="date" name="end" value="{{ end|date:'Y-m-d' }}"></div>
+      <div class="col-md-3"><button class="btn figma-log-btn w-100">Apply</button></div>
+    </form>
+  </div>
+
+  <div class="analytics-kpi-grid">
+    <div class="analytics-kpi kpi-primary"><div class="analytics-icon"><i class="bi bi-cash-coin"></i></div><span>Total Sales</span><strong>&#8369;{{ total_sales|floatformat:2 }}</strong><small>{{ start|date:"M d" }} - {{ end|date:"M d, Y" }}</small></div>
+    <div class="analytics-kpi kpi-success"><div class="analytics-icon"><i class="bi bi-receipt"></i></div><span>Total Orders</span><strong>{{ total_orders }}</strong><small>AOV &#8369;{{ average_order_value|floatformat:2 }}</small></div>
+    <div class="analytics-kpi kpi-warning">
+      <div class="analytics-icon"><i class="bi bi-cup-hot"></i></div>
+      <span>Drinks Orders</span>
+      <strong>{{ total_drinks_sold }}</strong>
+      <small>Add-ons {{ total_addons_sold }}</small>
+    </div>
+
+    <div class="analytics-kpi kpi-danger">
+      <div class="analytics-icon"><i class="bi bi-stars"></i></div>
+      <span>Category Orders</span>
+      <strong>{{ total_drinks_sold|add:total_stickers_sold|add:total_cookies_sold }}</strong>
+      <small>
+        Drinks {{ total_drinks_sold }} &bull;
+        Stickers {{ total_stickers_sold }} &bull;
+        Cookies {{ total_cookies_sold }}
+      </small>
+    </div>
+  </div>
+
+  <div class="analytics-grid-two">
+    <div class="analytics-card">
+      <div class="analytics-card-head"><div><h2>Daily Sales Trend</h2><p>Selected date range</p></div></div>
+      <canvas id="posSalesTrend" height="160"></canvas>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-card-head"><div><h2>Category Revenue</h2><p>Sales breakdown by category</p></div></div>
+      <canvas id="posCategoryChart" height="160"></canvas>
+    </div>
+  </div>
+
+  <div class="analytics-grid-two">
+    <div class="analytics-card">
+      <div class="analytics-card-head"><div><h2>Best-Selling Products</h2><p>Quantity and revenue</p></div></div>
+      <div class="performance-list">
+        {% for row in product_rows %}
+          <div class="performance-row"><div><strong>{{ row.product_name }}</strong><span>{{ row.category_type }} &bull; {{ row.qty }} sold</span></div><b>&#8369;{{ row.revenue|floatformat:2 }}</b></div>
+        {% empty %}
+          <div class="empty-analytics">No POS sales yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="analytics-card">
+      <div class="analytics-card-head"><div><h2>Category Breakdown</h2><p>Revenue by grouped products</p></div></div>
+      <div class="analytics-table big-lines">
+        {% for row in category_rows %}
+          <div><span>{{ row.category_name }} ({{ row.qty }} sold)</span><strong>&#8369;{{ row.revenue|floatformat:2 }}</strong></div>
+        {% empty %}
+          <div><span>No sales yet</span><strong>&#8369;0.00</strong></div>
+        {% endfor %}
+        <div><span>Add-ons ({{ total_addons_sold }} sold)</span><strong>&#8369;{{ addon_revenue|floatformat:2 }}</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-card">
+    <div class="analytics-card-head"><div><h2>Recent POS Orders</h2><p>Latest orders in this range</p></div></div>
+    <div class="table-responsive">
+      <table class="table analytics-sales-table align-middle">
+        <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Payment</th><th>Status</th><th class="text-end">Total</th><th></th></tr></thead>
+        <tbody>
+          {% for order in page_obj %}
+            <tr>
+              <td>{{ order.order_number }}</td>
+              <td>{{ order.customer_name|default:"Customer #" }}{% if not order.customer_name %}{{ order.customer_number }}{% endif %}</td>
+              <td>{{ order.created_at|date:"M d, g:i A" }}</td>
+              <td>{{ order.payment_method }}</td>
+              <td><span class="analytics-status">{{ order.payment_status }}</span></td>
+              <td class="text-end">&#8369;{{ order.total_amount|floatformat:2 }}</td>
+              <td class="text-end">
+                <a href="{% url 'pos_receipt' order.pk %}" target="_blank" class="btn btn-sm btn-success action-icon-btn" title="Receipt" aria-label="Receipt {{ order.order_number }}">
+                  <i class="bi bi-receipt"></i>
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="text-center text-muted py-4">No orders for this range.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+      <nav class="mt-3" aria-label="Recent POS orders pages">
+        <ul class="pagination justify-content-end mb-0">
+          <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_previous %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.previous_page_number }}{% else %}#{% endif %}" aria-label="Previous">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+          {% for page_number in paginator.page_range %}
+            {% if page_number == page_obj.number %}
+              <li class="page-item active" aria-current="page"><span class="page-link">{{ page_number }}</span></li>
+            {% elif page_number >= page_obj.number|add:"-2" and page_number <= page_obj.number|add:"2" %}
+              <li class="page-item">
+                <a class="page-link" href="?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_number }}">{{ page_number }}</a>
+              </li>
+            {% endif %}
+          {% endfor %}
+          <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+            <a class="page-link" href="{% if page_obj.has_next %}?{% if pagination_query %}{{ pagination_query }}&{% endif %}page={{ page_obj.next_page_number }}{% else %}#{% endif %}" aria-label="Next">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const posPalette = ['#4b9be8', '#087f68', '#f4b740', '#ef7d6b', '#183153'];
+new Chart(document.getElementById('posSalesTrend'), {
+  type: 'line',
+  data: {labels: {{ chart_labels|safe }}, datasets: [{label: 'Sales', data: {{ chart_sales|safe }}, borderColor: posPalette[0], backgroundColor: 'rgba(75,155,232,.16)', fill: true, tension: .35}]},
+  options: {scales: {y: {beginAtZero: true}, x: {grid: {display: false}}}}
+});
+new Chart(document.getElementById('posCategoryChart'), {
+  type: 'doughnut',
+  data: {labels: {{ category_labels|safe }}, datasets: [{data: {{ category_values|safe }}, backgroundColor: posPalette, borderWidth: 0}]},
+  options: {cutout: '65%', plugins: {legend: {position: 'bottom'}}}
+});
+</script>
+{% endblock %}

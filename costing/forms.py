@@ -197,7 +197,7 @@ class QuoteForm(forms.Form):
         min_value=0,
     )
 
-from .models import ProductCategory, ProductPreset, ProductPriceTier, QuickPOSProduct, SmartPasteInquiry
+from .models import ProductCategory, ProductPreset, ProductPriceTier, QuickPOSProduct, SmartPasteInquiry, POSCategory, POSProduct
 
 
 class ProductCategoryForm(BootstrapModelForm):
@@ -318,6 +318,45 @@ class QuickPOSProductForm(BootstrapModelForm):
         self.fields["packaging"].queryset = Material.objects.filter(
             is_active=True, category=Material.CATEGORY_PACKAGING
         ).order_by("item_name")
+
+
+class POSCategoryForm(BootstrapModelForm):
+    class Meta:
+        model = POSCategory
+        fields = ["name", "category_type", "description", "is_active"]
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+
+class POSProductForm(BootstrapModelForm):
+    class Meta:
+        model = POSProduct
+        fields = [
+            "category",
+            "name",
+            "price",
+            "cost",
+            "description",
+            "image",
+            "is_active",
+            "allow_addons",
+            "promo_bundle_qty",
+            "promo_bundle_price",
+        ]
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = POSCategory.objects.filter(is_active=True).order_by("category_type", "name")
+        self.fields["cost"].required = False
+        self.fields["image"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        category = cleaned.get("category")
+        allow_addons = cleaned.get("allow_addons")
+        if allow_addons and category and category.category_type != POSCategory.TYPE_DRINK:
+            self.add_error("allow_addons", "Only drink products can allow add-ons.")
+        return cleaned
 
 
 class SmartPasteInquiryForm(BootstrapModelForm):

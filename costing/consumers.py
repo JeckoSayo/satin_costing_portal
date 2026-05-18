@@ -1,11 +1,18 @@
+import json
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.core.serializers.json import DjangoJSONEncoder
 
 from . import services
 
 
 class AuthenticatedGroupConsumer(AsyncJsonWebsocketConsumer):
     group_name = None
+
+    @classmethod
+    async def encode_json(cls, content):
+        return json.dumps(content, cls=DjangoJSONEncoder)
 
     async def connect(self):
         user = self.scope.get("user")

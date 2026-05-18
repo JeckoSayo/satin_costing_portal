@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from django.db import models
+from django.utils import timezone
 
 
 class PaperSize(models.Model):
@@ -980,6 +981,185 @@ class QuickPOSPriceSnapshot(models.Model):
     def __str__(self):
         return f"{self.product.name} - {self.snapshot_date}"
 
+
+class POSCategory(models.Model):
+    """Retail POS category for counter products such as drinks, stickers, cookies, and add-ons."""
+    TYPE_DRINK = "DRINK"
+    TYPE_STICKER = "STICKER"
+    TYPE_COOKIE = "COOKIE"
+    TYPE_ADDON = "ADDON"
+    TYPE_OTHER = "OTHER"
+
+    TYPE_CHOICES = [
+        (TYPE_DRINK, "Drink"),
+        (TYPE_STICKER, "Sticker"),
+        (TYPE_COOKIE, "Cookie"),
+        (TYPE_ADDON, "Add-on"),
+        (TYPE_OTHER, "Other"),
+    ]
+
+    name = models.CharField(max_length=120, unique=True)
+    category_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_OTHER)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["category_type", "name"]
+        verbose_name_plural = "POS categories"
+
+    def __str__(self):
+        return self.name
+
+
+class POSProduct(models.Model):
+    """Retail POS product managed independently from the sticker costing catalog."""
+    category = models.ForeignKey(POSCategory, on_delete=models.PROTECT, related_name="products")
+    name = models.CharField(max_length=160)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), blank=True)
+    description = models.TextField(blank=True)
+    image = models.FileField(upload_to="pos_products/", blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    allow_addons = models.BooleanField(default=False)
+    promo_bundle_qty = models.PositiveIntegerField(default=0, help_text="Optional bundle quantity. Example: 5 stickers.")
+    promo_bundle_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), help_text="Optional bundle price. Example: 125.00.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["category__category_type", "name"]
+        unique_together = [["category", "name"]]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def category_type(self):
+        return self.category.category_type if self.category_id else POSCategory.TYPE_OTHER
+
+    @property
+    def is_drink(self):
+        return self.category_type == POSCategory.TYPE_DRINK
+
+    @property
+    def is_addon(self):
+        return self.category_type == POSCategory.TYPE_ADDON
+
+    def price_for_quantity(self, quantity):
+        quantity = int(quantity or 0)
+        if self.promo_bundle_qty and self.promo_bundle_price and quantity >= self.promo_bundle_qty:
+            bundles = quantity // self.promo_bundle_qty
+            remainder = quantity % self.promo_bundle_qty
+            return (self.promo_bundle_price * bundles) + (self.price * remainder)
+        return self.price * Decimal(str(quantity))
+
+
+class POSOrder(models.Model):
+    PAYMENT_PENDING = "Pending"
+    PAYMENT_PAID = "Paid"
+    PAYMENT_VOID = "Void"
+    PAYMENT_CHOICES = [
+        (PAYMENT_PENDING, "Pending"),
+        (PAYMENT_PAID, "Paid"),
+        (PAYMENT_VOID, "Void"),
+    ]
+    METHOD_CASH = "Cash"
+    METHOD_ONLINE = "Online Payment"
+    METHOD_CHOICES = [
+        (METHOD_CASH, "Cash"),
+        (METHOD_ONLINE, "Online Payment"),
+    ]
+
+    order_number = models.CharField(max_length=40, unique=True, blank=True)
+    customer_number = models.PositiveIntegerField(default=1)
+    customer_name = models.CharField(max_length=120, blank=True)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    cash_received = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    change_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    payment_method = models.CharField(max_length=30, choices=METHOD_CHOICES, default=METHOD_CASH)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default=PAYMENT_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.order_number or f"POS Order #{self.pk}"
+
+    @property
+    def gross_profit(self):
+        return sum(item.line_profit for item in self.items.all())
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.order_number:
+            local_created = timezone.localtime(self.created_at)
+            self.order_number = f"POS-{local_created:%Y%m%d}-{self.pk:05d}"
+            POSOrder.objects.filter(pk=self.pk).update(order_number=self.order_number)
+
+
+class POSOrderItem(models.Model):
+    order = models.ForeignKey(POSOrder, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(POSProduct, on_delete=models.PROTECT, related_name="order_items")
+    product_name = models.CharField(max_length=160)
+    category_name = models.CharField(max_length=120)
+    category_type = models.CharField(max_length=20, choices=POSCategory.TYPE_CHOICES, default=POSCategory.TYPE_OTHER)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_profit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product_name}"
+
+
+class POSOrderItemAddon(models.Model):
+    order_item = models.ForeignKey(POSOrderItem, on_delete=models.CASCADE, related_name="addons")
+    addon = models.ForeignKey(POSProduct, on_delete=models.PROTECT, related_name="addon_order_items")
+    addon_name = models.CharField(max_length=160)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.addon_name} x {self.quantity}"
+
+
+class POSQueueItem(models.Model):
+    STATUS_PENDING = "Pending"
+    STATUS_PREPARING = "Preparing"
+    STATUS_READY = "Ready"
+    STATUS_COMPLETED = "Completed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PREPARING, "Preparing"),
+        (STATUS_READY, "Ready"),
+        (STATUS_COMPLETED, "Completed"),
+    ]
+
+    order = models.ForeignKey(POSOrder, on_delete=models.CASCADE, related_name="queue_items")
+    order_item = models.ForeignKey(POSOrderItem, on_delete=models.CASCADE, related_name="queue_items")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    ready_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["queued_at"]
+
+    def __str__(self):
+        return f"Customer #{self.order.customer_number} - {self.order_item.product_name}"
 
 class SmartPasteInquiry(models.Model):
     """V5: pasted customer chat parsed into quote/order draft fields."""

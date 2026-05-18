@@ -7,7 +7,7 @@ MaterialExportExcelView, MaterialImportExcelView,
 PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
 PaperSizeExportExcelView, PaperSizeImportExcelView,
     PriceSettingsView, SalesLogView, SalesLogExportExcelView, SalesLogImportExcelView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
-    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
+    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, POSCreateOrderView, POSQueueDataView, POSQueueStatusView, POSReceiptView, POSSalesDashboardView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, POSProductInlineCreateView, POSProductInlineUpdateView, POSProductToggleView, POSProductDeleteView, POSCategoryCreateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
 )
 
 urlpatterns = [
@@ -34,9 +34,19 @@ urlpatterns = [
     path('smart-paste/<int:pk>/edit/', SmartPasteInquiryUpdateView.as_view(), name='smart_paste_edit'),
     path('smart-paste/<int:pk>/delete/', SmartPasteInquiryDeleteView.as_view(), name='smart_paste_delete'),
     path('pos/', FastPOSView.as_view(), name='fast_pos'),
+    path('pos/orders/create/', POSCreateOrderView.as_view(), name='pos_order_create'),
+    path('pos/queue/data/', POSQueueDataView.as_view(), name='pos_queue_data'),
+    path('pos/queue/<int:pk>/status/', POSQueueStatusView.as_view(), name='pos_queue_status'),
+    path('pos/orders/<int:pk>/receipt/', POSReceiptView.as_view(), name='pos_receipt'),
+    path('pos/dashboard/', POSSalesDashboardView.as_view(), name='pos_sales_dashboard'),
     path('pos/products/', QuickPOSProductListView.as_view(), name='pos_products'),
     path('pos/products/add/', QuickPOSProductCreateView.as_view(), name='pos_product_add'),
+    path('pos/products/quick-add/', POSProductInlineCreateView.as_view(), name='pos_product_quick_add'),
     path('pos/products/<int:pk>/edit/', QuickPOSProductUpdateView.as_view(), name='pos_product_edit'),
+    path('pos/products/<int:pk>/quick-edit/', POSProductInlineUpdateView.as_view(), name='pos_product_quick_edit'),
+    path('pos/products/<int:pk>/toggle/', POSProductToggleView.as_view(), name='pos_product_toggle'),
+    path('pos/products/<int:pk>/delete/', POSProductDeleteView.as_view(), name='pos_product_delete'),
+    path('pos/categories/add/', POSCategoryCreateView.as_view(), name='pos_category_add'),
     path('pos/products/<int:pk>/snapshot/', CreatePOSPriceSnapshotView.as_view(), name='pos_product_snapshot'),
 
 
