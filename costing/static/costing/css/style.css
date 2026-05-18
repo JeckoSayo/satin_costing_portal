@@ -3855,3 +3855,28 @@ select{
 .amount-due-row strong {
     color: red;
 }
+.pos-product-image {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    background: #f8fafc;
+}
+
+.pos-product-button {
+    text-align: left;
+    overflow: hidden;
+}.pos-summary-image-btn {
+    width: 48px;
+    height: 48px;
+    padding: 2px;
+    overflow: hidden;
+}
+
+.pos-summary-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+}

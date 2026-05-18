@@ -45,20 +45,28 @@
             <div class="pos-product-grid">
               {% for product in group.products %}
                 <button type="button"
-                        class="pos-product-button"
-                        data-product-id="{{ product.id }}"
-                        data-name="{{ product.name }}"
-                        data-price="{{ product.price }}"
-                        data-promo-qty="{{ product.promo_bundle_qty }}"
-                        data-promo-price="{{ product.promo_bundle_price }}"
-                        data-category="{{ product.category.category_type }}"
-                        data-allow-addons="{% if product.allow_addons %}true{% else %}false{% endif %}">
-                  <span>{{ product.name }}</span>
-                  <strong>&#8369;{{ product.price|floatformat:2 }}</strong>
-                  {% if product.promo_bundle_qty and product.promo_bundle_price %}
-                    <small>{{ product.promo_bundle_qty }} for &#8369;{{ product.promo_bundle_price|floatformat:2 }}</small>
-                  {% endif %}
-                </button>
+                      class="pos-product-button"
+                      data-product-id="{{ product.id }}"
+                      data-name="{{ product.name }}"
+                      data-price="{{ product.price }}"
+                      data-promo-qty="{{ product.promo_bundle_qty }}"
+                      data-promo-price="{{ product.promo_bundle_price }}"
+                      data-category="{{ product.category.category_type }}"
+                      data-allow-addons="{% if product.allow_addons %}true{% else %}false{% endif %}"
+                      data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}">
+                {% if product.image %}
+                  <img src="{{ product.image.url }}"
+                      alt="{{ product.name }}"
+                      class="pos-product-image">
+                {% endif %}
+
+                <span>{{ product.name }}</span>
+                <strong>&#8369;{{ product.price|floatformat:2 }}</strong>
+
+                {% if product.promo_bundle_qty and product.promo_bundle_price %}
+                  <small>{{ product.promo_bundle_qty }} for &#8369;{{ product.promo_bundle_price|floatformat:2 }}</small>
+                {% endif %}
+              </button>
               {% endfor %}
             </div>
           </div>
@@ -297,8 +305,11 @@ function renderCart() {
   target.innerHTML = cart.map(item => `
     <div class="pos-order-line ${selectedLineId === item.lineId ? 'selected' : ''}" data-line-id="${item.lineId}">
       <div class="pos-line-main">
-        <button class="btn btn-sm btn-light select-line" type="button" data-line-id="${item.lineId}">
-          <i class="bi bi-dot"></i>
+        <button class="btn btn-sm btn-light select-line pos-summary-image-btn" type="button" data-line-id="${item.lineId}">
+          ${item.imageUrl
+            ? `<img src="${item.imageUrl}" alt="${item.name}" class="pos-summary-image">`
+            : `<i class="bi bi-dot"></i>`
+          }
         </button>
 
         <div>
@@ -360,6 +371,7 @@ function addProduct(button) {
     lineId: lineKey(button.dataset.productId),
     productId: Number(button.dataset.productId),
     name: button.dataset.name,
+    imageUrl: button.dataset.imageUrl,
     price: Number(button.dataset.price),
     promoQty: Number(button.dataset.promoQty || 0),
     promoPrice: Number(button.dataset.promoPrice || 0),
