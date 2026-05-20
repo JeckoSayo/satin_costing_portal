@@ -65,16 +65,26 @@
 
 <div class="app-shell">
 
-  <aside class="sidebar d-none d-lg-flex">
-    <div class="brand brand-modern">
-      <img src="{% static 'costing/img/SATIN.png' %}"
-           class="brand-logo"
-           alt="Satin Creative Studio">
+  <aside class="sidebar d-none d-lg-flex" id="desktopSidebar">
+    <div class="sidebar-head">
+      <div class="brand brand-modern">
+        <img src="{% static 'costing/img/SATIN.png' %}"
+             class="brand-logo"
+             alt="Satin Creative Studio">
 
-      <div class="brand-text">
-        <h3>Satin Creative</h3>
-        <span>Studio</span>
+        <div class="brand-text">
+          <h3>Satin Creative</h3>
+          <span>Studio</span>
+        </div>
       </div>
+
+      <button type="button"
+              class="sidebar-toggle"
+              id="sidebarToggle"
+              aria-label="Collapse sidebar"
+              aria-expanded="true">
+        <i class="bi bi-chevron-left"></i>
+      </button>
     </div>
 
     <nav class="nav flex-column gap-2">
@@ -130,6 +140,33 @@
 
 <script src="{% static 'costing/js/bootstrap_tour_v4.js' %}"></script>
 <script src="{% static 'costing/js/realtime.js' %}"></script>
+<script>
+  (function () {
+    const sidebar = document.getElementById('desktopSidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    if (!sidebar || !toggle) return;
+
+    const storageKey = 'satin.sidebarCollapsed';
+    const setCollapsed = function (collapsed) {
+      document.body.classList.toggle('sidebar-collapsed', collapsed);
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+      localStorage.setItem(storageKey, collapsed ? '1' : '0');
+    };
+
+    sidebar.querySelectorAll('.nav-link').forEach(function (link) {
+      const label = link.querySelector('span');
+      if (label && !link.getAttribute('title')) {
+        link.setAttribute('title', label.textContent.trim());
+      }
+    });
+
+    setCollapsed(localStorage.getItem(storageKey) === '1');
+    toggle.addEventListener('click', function () {
+      setCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+    });
+  })();
+</script>
 {% block scripts %}{% endblock %}
 
 </body>

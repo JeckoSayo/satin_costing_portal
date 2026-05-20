@@ -1883,10 +1883,6 @@ class POSSalesDashboardView(TemplateView):
             created_at__date__gte=start,
             created_at__date__lte=end,
         ).order_by("-created_at")
-        paginator = Paginator(orders, 10)
-        page_obj = paginator.get_page(self.request.GET.get("page"))
-        query_params = self.request.GET.copy()
-        query_params.pop("page", None)
         items = POSOrderItem.objects.filter(order__in=orders)
         addons = POSOrderItemAddon.objects.filter(order_item__order__in=orders)
         total_sales = orders.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
@@ -1917,10 +1913,6 @@ class POSSalesDashboardView(TemplateView):
             cursor += timedelta(days=1)
         category_labels = [row["category_name"] for row in category_rows]
         category_values = [float(row["revenue"] or 0) for row in category_rows]
-        paginator = Paginator(orders, 10)
-        page_obj = paginator.get_page(self.request.GET.get("page"))
-        query_params = self.request.GET.copy()
-        query_params.pop("page", None)
         ctx.update({
             "period": period,
             "start": start,
@@ -1936,10 +1928,7 @@ class POSSalesDashboardView(TemplateView):
             "product_rows": product_rows,
             "category_rows": category_rows,
             "best_category": best_category,
-            "recent_orders": page_obj.object_list,
-            "page_obj": page_obj,
-            "paginator": paginator,
-            "pagination_query": query_params.urlencode(),
+            "recent_orders": orders,
             "chart_labels": json.dumps(day_labels),
             "chart_sales": json.dumps(day_sales),
             "category_labels": json.dumps(category_labels),
