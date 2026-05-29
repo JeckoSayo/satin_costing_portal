@@ -101,15 +101,32 @@
         <div class="row g-2">
           <div class="col-12">
             <label class="form-label">Customer Name <span class="text-danger">*</span></label>
-            <input class="form-control form-control-lg" id="customerNameInput" required>
+            <input class="form-control form-control-lg mobile-text-input"
+                   id="customerNameInput"
+                   name="customer_name"
+                   required
+                   autocomplete="name"
+                   autocapitalize="words"
+                   spellcheck="false"
+                   inputmode="text">
           </div>
           <div class="col-12">
             <label class="form-label">Contact Number</label>
-            <input class="form-control" id="contactNumberInput" inputmode="tel">
+            <input class="form-control mobile-text-input"
+                   id="contactNumberInput"
+                   name="contact_number"
+                   inputmode="tel"
+                   autocomplete="tel">
           </div>
           <div class="col-12">
             <label class="form-label">Special Instructions</label>
-            <textarea class="form-control" id="specialInstructionsInput" rows="2" placeholder="Less sweet, no ice, extra ice, separate packaging"></textarea>
+            <textarea class="form-control mobile-text-input"
+                      id="specialInstructionsInput"
+                      name="special_instructions"
+                      rows="2"
+                      autocomplete="off"
+                      autocapitalize="sentences"
+                      placeholder="Less sweet, no ice, extra ice, separate packaging"></textarea>
           </div>
         </div>
 
@@ -416,6 +433,16 @@
   setInterval(refreshQueue, 5000);
   renderQueue({{ queue_payload_json|safe }});
   renderCart();
+  installMobileTextInputFix();
+  function installMobileTextInputFix() {
+    document.querySelectorAll('.mobile-text-input, input[type="text"], textarea').forEach(field => {
+      field.addEventListener('touchend', () => {
+        setTimeout(() => {
+          if (document.activeElement !== field) field.focus({preventScroll: true});
+        }, 0);
+      }, {passive: true});
+    });
+  }
   </script>
 </body>
 </html>
