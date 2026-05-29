@@ -1069,6 +1069,14 @@ class POSOrder(models.Model):
         (METHOD_CASH, "Cash"),
         (METHOD_ONLINE, "Online Payment"),
     ]
+    SOURCE_WALKIN = "Walk-in POS"
+    SOURCE_TABLET = "Customer Tablet"
+    SOURCE_ONLINE = "Online Order"
+    SOURCE_CHOICES = [
+        (SOURCE_WALKIN, "Walk-in POS"),
+        (SOURCE_TABLET, "Customer Tablet"),
+        (SOURCE_ONLINE, "Online Order"),
+    ]
 
     order_number = models.CharField(max_length=40, unique=True, blank=True)
     customer_number = models.PositiveIntegerField(default=1)
@@ -1080,6 +1088,7 @@ class POSOrder(models.Model):
     change_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
     payment_method = models.CharField(max_length=30, choices=METHOD_CHOICES, default=METHOD_CASH)
     payment_status = models.CharField(max_length=20, choices=PAYMENT_CHOICES, default=PAYMENT_PENDING)
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default=SOURCE_WALKIN)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1160,6 +1169,186 @@ class POSQueueItem(models.Model):
 
     def __str__(self):
         return f"Customer #{self.order.customer_number} - {self.order_item.product_name}"
+
+
+class CustomerOrderingSetting(models.Model):
+    average_preparation_minutes = models.PositiveIntegerField(default=2)
+    gcash_qr = models.FileField(upload_to="payment_qr/", blank=True, null=True)
+    maya_qr = models.FileField(upload_to="payment_qr/", blank=True, null=True)
+    bank_qr = models.FileField(upload_to="payment_qr/", blank=True, null=True)
+    gcash_instructions = models.TextField(blank=True, default="Scan the GCash QR code and upload your payment proof.")
+    maya_instructions = models.TextField(blank=True, default="Scan the Maya QR code and upload your payment proof.")
+    bank_instructions = models.TextField(blank=True, default="Send your bank transfer and upload your payment proof.")
+    notification_sound = models.FileField(upload_to="notification_sounds/", blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Customer ordering setting"
+        verbose_name_plural = "Customer ordering settings"
+
+    def __str__(self):
+        return "Customer Ordering Settings"
+
+
+class CustomerOrder(models.Model):
+    PAYMENT_METHOD_CASH = "Cash"
+    PAYMENT_METHOD_ONLINE = "Online Payment"
+    PAYMENT_METHOD_CHOICES = [
+        (PAYMENT_METHOD_CASH, "Cash"),
+        (PAYMENT_METHOD_ONLINE, "Online Payment"),
+    ]
+    ONLINE_GCASH = "GCash"
+    ONLINE_MAYA = "Maya"
+    ONLINE_BANK = "Bank Transfer"
+    ONLINE_CHOICES = [
+        (ONLINE_GCASH, "GCash"),
+        (ONLINE_MAYA, "Maya"),
+        (ONLINE_BANK, "Bank Transfer"),
+    ]
+    PAYMENT_UNPAID = "Unpaid"
+    PAYMENT_WAITING = "Waiting Verification"
+    PAYMENT_PAID = "Paid"
+    PAYMENT_REFUNDED = "Refunded"
+    PAYMENT_STATUS_CHOICES = [
+        (PAYMENT_UNPAID, "Unpaid"),
+        (PAYMENT_WAITING, "Waiting Verification"),
+        (PAYMENT_PAID, "Paid"),
+        (PAYMENT_REFUNDED, "Refunded"),
+    ]
+    STATUS_PENDING_PAYMENT = "Pending Payment"
+    STATUS_PENDING_VERIFICATION = "Pending Verification"
+    STATUS_PREPARING = "Preparing"
+    STATUS_READY = "Ready for Pickup"
+    STATUS_COMPLETED = "Completed"
+    STATUS_CANCELLED = "Cancelled"
+    ORDER_STATUS_CHOICES = [
+        (STATUS_PENDING_PAYMENT, "Pending Payment"),
+        (STATUS_PENDING_VERIFICATION, "Pending Verification"),
+        (STATUS_PREPARING, "Preparing"),
+        (STATUS_READY, "Ready for Pickup"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    order_number = models.CharField(max_length=40, unique=True, blank=True)
+    customer_name = models.CharField(max_length=120)
+    contact_number = models.CharField(max_length=50, blank=True)
+    special_instructions = models.TextField(blank=True)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    cash_received = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    change_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    payment_method = models.CharField(max_length=30, choices=PAYMENT_METHOD_CHOICES)
+    online_payment_channel = models.CharField(max_length=30, choices=ONLINE_CHOICES, blank=True)
+    payment_status = models.CharField(max_length=30, choices=PAYMENT_STATUS_CHOICES, default=PAYMENT_UNPAID)
+    order_status = models.CharField(max_length=30, choices=ORDER_STATUS_CHOICES, default=STATUS_PENDING_PAYMENT)
+    payment_proof = models.FileField(upload_to="payment_proofs/", blank=True, null=True)
+    staff_notes = models.TextField(blank=True)
+    pos_order = models.OneToOneField(POSOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name="customer_order")
+    paid_at = models.DateTimeField(null=True, blank=True)
+    preparing_at = models.DateTimeField(null=True, blank=True)
+    ready_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.order_number or f"Customer Order #{self.pk}"
+
+    @property
+    def total_quantity(self):
+        return sum(item.quantity for item in self.items.all())
+
+    @property
+    def actual_processing_minutes(self):
+        if not self.preparing_at or not self.completed_at:
+            return None
+        return round((self.completed_at - self.preparing_at).total_seconds() / 60, 1)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.order_number:
+            self.order_number = f"ORD-{self.pk:06d}"
+            CustomerOrder.objects.filter(pk=self.pk).update(order_number=self.order_number)
+
+
+class CustomerOrderItem(models.Model):
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(POSProduct, on_delete=models.PROTECT, related_name="customer_order_items")
+    product_name = models.CharField(max_length=160)
+    category_name = models.CharField(max_length=120)
+    category_type = models.CharField(max_length=20, choices=POSCategory.TYPE_CHOICES, default=POSCategory.TYPE_OTHER)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_profit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product_name}"
+
+
+class CustomerOrderItemAddon(models.Model):
+    order_item = models.ForeignKey(CustomerOrderItem, on_delete=models.CASCADE, related_name="addons")
+    addon = models.ForeignKey(POSProduct, on_delete=models.PROTECT, related_name="customer_addon_order_items")
+    addon_name = models.CharField(max_length=160)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    line_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.addon_name} x {self.quantity}"
+
+
+class OrderPayment(models.Model):
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name="payments")
+    method = models.CharField(max_length=30, choices=CustomerOrder.PAYMENT_METHOD_CHOICES)
+    online_channel = models.CharField(max_length=30, choices=CustomerOrder.ONLINE_CHOICES, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=30, choices=CustomerOrder.PAYMENT_STATUS_CHOICES)
+    proof = models.FileField(upload_to="payment_proofs/", blank=True, null=True)
+    verified_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class OrderStatusHistory(models.Model):
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name="status_history")
+    old_status = models.CharField(max_length=30, blank=True)
+    new_status = models.CharField(max_length=30)
+    note = models.TextField(blank=True)
+    changed_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Order status histories"
+
+
+class OrderNotification(models.Model):
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name="notifications")
+    title = models.CharField(max_length=160)
+    message = models.TextField(blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
 
 class SmartPasteInquiry(models.Model):
     """V5: pasted customer chat parsed into quote/order draft fields."""

@@ -37,6 +37,31 @@ class AuthenticatedGroupConsumer(AsyncJsonWebsocketConsumer):
         return None
 
 
+class PublicGroupConsumer(AsyncJsonWebsocketConsumer):
+    group_name = None
+
+    @classmethod
+    async def encode_json(cls, content):
+        return json.dumps(content, cls=DjangoJSONEncoder)
+
+    async def connect(self):
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+        initial_payload = await self.get_initial_payload()
+        if initial_payload:
+            await self.send_json(initial_payload)
+
+    async def disconnect(self, close_code):
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def send_json_event(self, event):
+        await self.send_json(event["payload"])
+
+    async def get_initial_payload(self):
+        return None
+
+
 class DashboardConsumer(AuthenticatedGroupConsumer):
     group_name = services.REALTIME_DASHBOARD_GROUP
 
@@ -74,4 +99,24 @@ class SalesConsumer(AuthenticatedGroupConsumer):
         return {
             "type": "sales.update",
             "payload": await database_sync_to_async(services.get_sales_realtime_payload)(),
+        }
+
+
+class CustomerQueueConsumer(PublicGroupConsumer):
+    group_name = services.REALTIME_CUSTOMER_QUEUE_GROUP
+
+    async def get_initial_payload(self):
+        return {
+            "type": "customer_queue.update",
+            "payload": await database_sync_to_async(services.get_customer_queue_payload)(),
+        }
+
+
+class StaffQueueConsumer(AuthenticatedGroupConsumer):
+    group_name = services.REALTIME_STAFF_QUEUE_GROUP
+
+    async def get_initial_payload(self):
+        return {
+            "type": "staff_queue.update",
+            "payload": await database_sync_to_async(services.get_staff_queue_payload)(),
         }

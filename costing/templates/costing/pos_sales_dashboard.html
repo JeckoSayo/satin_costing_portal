@@ -30,6 +30,9 @@
   <div class="analytics-kpi-grid">
     <div class="analytics-kpi kpi-primary"><div class="analytics-icon"><i class="bi bi-cash-coin"></i></div><span>Total Sales</span><strong>&#8369;{{ total_sales|floatformat:2 }}</strong><small>{{ start|date:"M d" }} - {{ end|date:"M d, Y" }}</small></div>
     <div class="analytics-kpi kpi-success"><div class="analytics-icon"><i class="bi bi-receipt"></i></div><span>Total Orders</span><strong>{{ total_orders }}</strong><small>AOV &#8369;{{ average_order_value|floatformat:2 }}</small></div>
+    <div class="analytics-kpi kpi-primary"><div class="analytics-icon"><i class="bi bi-person-walking"></i></div><span>Walk-in Sales</span><strong>&#8369;{{ walkin_sales|floatformat:2 }}</strong><small>Counter POS</small></div>
+    <div class="analytics-kpi kpi-success"><div class="analytics-icon"><i class="bi bi-tablet"></i></div><span>Tablet Sales</span><strong>&#8369;{{ tablet_sales|floatformat:2 }}</strong><small>Completed customer orders</small></div>
+    <div class="analytics-kpi kpi-warning"><div class="analytics-icon"><i class="bi bi-cloud-check"></i></div><span>Online Sales</span><strong>&#8369;{{ online_sales|floatformat:2 }}</strong><small>Online source</small></div>
     <div class="analytics-kpi kpi-warning">
       <div class="analytics-icon"><i class="bi bi-cup-hot"></i></div>
       <span>Drinks Orders</span>
@@ -88,13 +91,14 @@
     <div class="analytics-card-head"><div><h2>Recent POS Orders</h2><p>Latest orders in this range</p></div></div>
     <div class="table-responsive">
       <table class="table analytics-sales-table align-middle" id="recentPosOrdersTable">
-        <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Payment</th><th>Status</th><th class="text-end">Total</th><th></th></tr></thead>
+        <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Source</th><th>Payment</th><th>Status</th><th class="text-end">Total</th><th></th></tr></thead>
         <tbody>
           {% for order in recent_orders %}
             <tr>
               <td>{{ order.order_number }}</td>
               <td>{{ order.customer_name|default:"Customer #" }}{% if not order.customer_name %}{{ order.customer_number }}{% endif %}</td>
               <td>{{ order.created_at|date:"M d, g:i A" }}</td>
+              <td>{{ order.source }}</td>
               <td>{{ order.payment_method }}</td>
               <td><span class="analytics-status">{{ order.payment_status }}</span></td>
               <td class="text-end">&#8369;{{ order.total_amount|floatformat:2 }}</td>

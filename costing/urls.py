@@ -7,7 +7,7 @@ MaterialExportExcelView, MaterialImportExcelView,
 PaperSizeListView, PaperSizeCreateView, PaperSizeUpdateView, PaperSizeDeleteView,
 PaperSizeExportExcelView, PaperSizeImportExcelView,
     PriceSettingsView, SalesLogView, SalesLogExportExcelView, SalesLogImportExcelView, SaleLogDeleteView, SaleLogUpdateView, SaleLogDetailView,
-    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, FastPOSView, POSCreateOrderView, POSQueueDataView, POSQueueStatusView, POSReceiptView, POSSalesDashboardView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, POSProductInlineCreateView, POSProductInlineUpdateView, POSProductToggleView, POSProductDeleteView, POSCategoryCreateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
+    SaleReceiptView, ProductCatalogView, ProductPresetCreateView, ProductPresetUpdateView, ProductPriceTierCreateView, ProductQuoteView, ProductCategoryCreateView, OrderQueueView, UpdateJobStatusView, CustomerHistoryView, ReorderSaleView, ExpenseListView, StockPurchaseListView, ShopTaskListView, JobTicketView, CashflowView, AnalyticsDashboardView, SmartBusinessView, CustomerOrderPageView, CustomerOrderCreateView, CustomerQueueDataView, CustomerOrderQueueView, StaffQueueDataView, CustomerOrderActionView, CustomerOrderNotesView, CustomerOrderReceiptRedirectView, FastPOSView, POSCreateOrderView, POSQueueDataView, POSQueueStatusView, POSReceiptView, POSSalesDashboardView, QuickPOSProductListView, QuickPOSProductCreateView, QuickPOSProductUpdateView, POSProductInlineCreateView, POSProductInlineUpdateView, POSProductToggleView, POSProductDeleteView, POSCategoryCreateView, CreatePOSPriceSnapshotView, SmartPasteView, SmartPasteInquiryUpdateView, SmartPasteInquiryDeleteView
 )
 
 urlpatterns = [
@@ -33,6 +33,14 @@ urlpatterns = [
     path('smart-paste/', SmartPasteView.as_view(), name='smart_paste'),
     path('smart-paste/<int:pk>/edit/', SmartPasteInquiryUpdateView.as_view(), name='smart_paste_edit'),
     path('smart-paste/<int:pk>/delete/', SmartPasteInquiryDeleteView.as_view(), name='smart_paste_delete'),
+    path('customer-order/', CustomerOrderPageView.as_view(), name='customer_order'),
+    path('customer-order/create/', CustomerOrderCreateView.as_view(), name='customer_order_create'),
+    path('customer-order/queue-data/', CustomerQueueDataView.as_view(), name='customer_queue_data'),
+    path('pos/order-queue/', CustomerOrderQueueView.as_view(), name='customer_order_queue'),
+    path('pos/order-queue/data/', StaffQueueDataView.as_view(), name='staff_queue_data'),
+    path('pos/order-queue/<int:pk>/action/', CustomerOrderActionView.as_view(), name='customer_order_action'),
+    path('pos/order-queue/<int:pk>/notes/', CustomerOrderNotesView.as_view(), name='customer_order_notes'),
+    path('pos/order-queue/<int:pk>/receipt/', CustomerOrderReceiptRedirectView.as_view(), name='customer_order_receipt'),
     path('pos/', FastPOSView.as_view(), name='fast_pos'),
     path('pos/orders/create/', POSCreateOrderView.as_view(), name='pos_order_create'),
     path('pos/queue/data/', POSQueueDataView.as_view(), name='pos_queue_data'),

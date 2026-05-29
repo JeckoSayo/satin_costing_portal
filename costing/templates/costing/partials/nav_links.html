@@ -23,6 +23,11 @@
   <span>POS Sales</span>
 </a>
 
+<a href="{% url 'customer_order_queue' %}" class="nav-link {% if request.resolver_match.url_name == 'customer_order_queue' %}active{% endif %}">
+  <i class="bi bi-list-check"></i>
+  <span>Customer Orders</span>
+</a>
+
 <a href="{% url 'product_catalog' %}" class="nav-link {% if request.resolver_match.url_name == 'product_catalog' %}active{% endif %}">
   <i class="bi bi-stars"></i>
   <span>Product Catalog</span>

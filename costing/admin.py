@@ -114,7 +114,7 @@ class ShopTaskAdmin(admin.ModelAdmin):
     search_fields = ("title", "notes", "related_sale__receipt_number")
 
 try:
-    from .models import QuickPOSProduct, QuickPOSPriceSnapshot, POSCategory, POSProduct, POSOrder, POSOrderItem, POSOrderItemAddon, POSQueueItem
+    from .models import QuickPOSProduct, QuickPOSPriceSnapshot, POSCategory, POSProduct, POSOrder, POSOrderItem, POSOrderItemAddon, POSQueueItem, CustomerOrderingSetting, CustomerOrder, CustomerOrderItem, CustomerOrderItemAddon, OrderPayment, OrderStatusHistory, OrderNotification
 
     @admin.register(QuickPOSProduct)
     class QuickPOSProductAdmin(admin.ModelAdmin):
@@ -152,8 +152,8 @@ try:
 
     @admin.register(POSOrder)
     class POSOrderAdmin(admin.ModelAdmin):
-        list_display = ("order_number", "customer_number", "customer_name", "created_at", "total_amount", "payment_method", "cash_received", "change_amount", "payment_status")
-        list_filter = ("payment_method", "payment_status", "created_at")
+        list_display = ("order_number", "customer_number", "customer_name", "created_at", "total_amount", "payment_method", "source", "cash_received", "change_amount", "payment_status")
+        list_filter = ("payment_method", "payment_status", "source", "created_at")
         search_fields = ("order_number", "customer_name")
         readonly_fields = ("order_number", "created_at")
         inlines = [POSOrderItemInline]
@@ -170,6 +170,35 @@ try:
         list_display = ("order", "order_item", "status", "queued_at", "started_at", "ready_at", "completed_at")
         list_filter = ("status", "queued_at")
         search_fields = ("order__order_number", "order_item__product_name")
+
+    admin.site.register(CustomerOrderingSetting)
+
+    class CustomerOrderItemAddonInline(admin.TabularInline):
+        model = CustomerOrderItemAddon
+        extra = 0
+
+    class CustomerOrderItemInline(admin.TabularInline):
+        model = CustomerOrderItem
+        extra = 0
+        readonly_fields = ("product_name", "category_name", "line_total", "line_cost", "line_profit")
+
+    @admin.register(CustomerOrder)
+    class CustomerOrderAdmin(admin.ModelAdmin):
+        list_display = ("order_number", "created_at", "customer_name", "total_amount", "payment_method", "payment_status", "order_status")
+        list_filter = ("payment_method", "payment_status", "order_status", "created_at")
+        search_fields = ("order_number", "customer_name", "contact_number")
+        readonly_fields = ("order_number", "created_at", "updated_at", "pos_order")
+        inlines = [CustomerOrderItemInline]
+
+    @admin.register(CustomerOrderItem)
+    class CustomerOrderItemAdmin(admin.ModelAdmin):
+        list_display = ("order", "product_name", "quantity", "line_total", "line_profit")
+        search_fields = ("order__order_number", "product_name")
+        inlines = [CustomerOrderItemAddonInline]
+
+    admin.site.register(OrderPayment)
+    admin.site.register(OrderStatusHistory)
+    admin.site.register(OrderNotification)
 except Exception:
     pass
 

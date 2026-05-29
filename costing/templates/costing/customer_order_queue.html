@@ -1,0 +1,251 @@
+{% extends "costing/base.html" %}
+{% block content %}
+<div class="figma-dashboard customer-staff-queue">
+  <div class="figma-page-head d-flex justify-content-between align-items-start gap-3">
+    <div>
+      <h1 class="page-title mb-1">Customer Orders</h1>
+      <p class="page-subtitle mb-0">Incoming self-orders, payment verification, preparation, receipts, and completion.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn figma-clear-btn" href="{% url 'customer_order' %}" target="_blank"><i class="bi bi-tablet me-1"></i>Customer Page</a>
+      <a class="btn figma-log-btn" href="{% url 'pos_sales_dashboard' %}"><i class="bi bi-graph-up me-1"></i>Sales Dashboard</a>
+    </div>
+  </div>
+
+  <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+  {% if settings.notification_sound %}
+    <audio id="queueSound" src="{{ settings.notification_sound.url }}" preload="auto"></audio>
+  {% else %}
+    <audio id="queueSound" preload="auto"></audio>
+  {% endif %}
+
+  <div class="sales-stat-grid customer-queue-stats" id="queueStats"></div>
+
+  <div class="figma-card mb-3">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3"><label class="form-label fw-bold">Status</label><select id="statusFilter" class="form-select"><option value="">All statuses</option>{% for value,label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="col-md-3"><label class="form-label fw-bold">Payment</label><select id="paymentFilter" class="form-select"><option value="">All payments</option>{% for value,label in payment_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="col-md-4"><label class="form-label fw-bold">Search</label><input id="queueSearch" class="form-control" placeholder="Order number, customer, product"></div>
+      <div class="col-md-2"><button id="refreshStaffQueue" class="btn figma-log-btn w-100" type="button"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button></div>
+    </div>
+  </div>
+
+  <div class="figma-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="mb-0">Order Queue</h2>
+      <span class="text-muted small">AJAX refresh every 5 seconds</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table align-middle customer-order-table">
+        <thead>
+          <tr>
+            <th>Order Number</th>
+            <th>Customer Name</th>
+            <th>Products Ordered</th>
+            <th>Quantity</th>
+            <th>Total Amount</th>
+            <th>Payment Method</th>
+            <th>Payment Status</th>
+            <th>Order Status</th>
+            <th>Order Time</th>
+            <th>Staff Notes</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="staffQueueRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="orderDetailsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Order Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="orderDetailsBody"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed top-0 end-0 p-3" id="staffQueueToasts" style="z-index: 1100"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.getElementById('csrfToken').value;
+let queuePayload = {{ payload|safe }};
+let cashDrafts = {};
+const money = value => `&#8369;${Number(value || 0).toFixed(2)}`;
+const text = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+const statusBadge = status => ({
+  'Pending Payment': 'text-bg-warning',
+  'Pending Verification': 'text-bg-info',
+  'Preparing': 'text-bg-primary',
+  'Ready for Pickup': 'text-bg-success',
+  'Completed': 'text-bg-dark',
+  'Cancelled': 'text-bg-secondary'
+}[status] || 'text-bg-secondary');
+function showToast(title, message) {
+  const el = document.createElement('div');
+  el.className = 'toast show';
+  el.innerHTML = `<div class="toast-header"><strong class="me-auto">${text(title)}</strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div class="toast-body">${text(message)}</div>`;
+  document.getElementById('staffQueueToasts').appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+function renderStats(stats) {
+  const cards = [
+    ['Pending Payment', stats.pending_payment],
+    ['Waiting Verification', stats.waiting_verification],
+    ['Preparing', stats.preparing],
+    ['Ready', stats.ready],
+    ['Completed Today', stats.completed_today],
+    ['Total Orders Today', stats.total_orders_today],
+    ['Total Revenue Today', money(stats.total_revenue_today)],
+    ['Average Wait Time', `${stats.average_wait_time} min`],
+    ['Fastest Today', `${stats.fastest_order_today} min`],
+    ['Slowest Today', `${stats.slowest_order_today} min`],
+    ['Current Queue Wait', `${stats.current_queue_wait_time} min`]
+  ];
+  document.getElementById('queueStats').innerHTML = cards.map(([label, value]) => `<div class="sales-stat-card"><span>${label}</span><strong>${value}</strong></div>`).join('');
+}
+function productSummary(order) {
+  return order.items.map(item => `${item.quantity} x ${text(item.product_name)}${item.addons.length ? ' +' + item.addons.map(addon => text(addon.addon_name)).join(', +') : ''}`).join('<br>');
+}
+function quantitySummary(order) {
+  return order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+}
+function actionButtons(order) {
+  const cashValue = cashDrafts[order.id] !== undefined ? cashDrafts[order.id] : (order.cash_received || '');
+  const cashCalculator = order.payment_method === 'Cash' && order.payment_status !== 'Paid' ? `
+    <div class="cash-change-calculator" data-cash-box="${order.id}">
+      <label>Cash Received</label>
+      <input class="form-control form-control-sm cash-received-input" data-id="${order.id}" data-total="${order.total_amount}" type="number" min="0" step="0.01" placeholder="0.00" value="${cashValue}">
+      <div><span>Change</span><strong data-change-for="${order.id}">${money(Math.max(Number(cashValue || 0) - order.total_amount, 0))}</strong></div>
+    </div>
+  ` : order.payment_method === 'Cash' && order.payment_status === 'Paid' ? `
+    <div class="cash-change-summary">
+      <span>Cash ${money(order.cash_received)}</span>
+      <strong>Change ${money(order.change_amount)}</strong>
+    </div>
+  ` : '';
+  return `
+    ${cashCalculator}
+    <div class="customer-order-actions">
+      <button class="btn btn-sm btn-outline-success" data-action="mark_paid" data-id="${order.id}">Mark Paid</button>
+      <button class="btn btn-sm btn-outline-success" data-action="verify_payment" data-id="${order.id}">Verify Payment</button>
+      <button class="btn btn-sm btn-outline-primary" data-action="preparing" data-id="${order.id}">Mark Preparing</button>
+      <button class="btn btn-sm btn-outline-success" data-action="ready" data-id="${order.id}">Mark Ready</button>
+      <button class="btn btn-sm btn-outline-dark" data-action="completed" data-id="${order.id}">Mark Completed</button>
+      <button class="btn btn-sm btn-outline-danger" data-action="cancel" data-id="${order.id}">Cancel Order</button>
+      <button class="btn btn-sm btn-outline-warning" data-action="refund" data-id="${order.id}">Refund Order</button>
+      <a class="btn btn-sm btn-outline-secondary" href="/pos/order-queue/${order.id}/receipt/" target="_blank">Print Receipt</a>
+      <button class="btn btn-sm btn-outline-info" data-detail="${order.id}">View Order Details</button>
+    </div>`;
+}
+function filteredOrders() {
+  const status = document.getElementById('statusFilter').value;
+  const payment = document.getElementById('paymentFilter').value;
+  const q = document.getElementById('queueSearch').value.toLowerCase();
+  return queuePayload.orders.filter(order => {
+    const haystack = `${order.order_number} ${order.customer_name} ${productSummary(order).replace(/<br>/g, ' ')}`.toLowerCase();
+    return (!status || order.order_status === status) && (!payment || order.payment_status === payment) && (!q || haystack.includes(q));
+  });
+}
+function renderRows() {
+  const rows = filteredOrders();
+  document.getElementById('staffQueueRows').innerHTML = rows.length ? rows.map(order => `
+    <tr>
+      <td><strong>${text(order.order_number)}</strong></td>
+      <td>${text(order.customer_name)}${order.contact_number ? `<small class="d-block text-muted">${text(order.contact_number)}</small>` : ''}</td>
+      <td>${productSummary(order)}</td>
+      <td>${quantitySummary(order)}</td>
+      <td>${money(order.total_amount)}</td>
+      <td>${text(order.payment_method)}${order.online_payment_channel ? `<small class="d-block text-muted">${text(order.online_payment_channel)}</small>` : ''}</td>
+      <td><span class="badge text-bg-light">${text(order.payment_status)}</span></td>
+      <td><span class="badge ${statusBadge(order.order_status)}">${text(order.order_status)}</span></td>
+      <td>${text(order.created_at)}</td>
+      <td><textarea class="form-control form-control-sm staff-note" data-id="${order.id}" rows="2">${text(order.staff_notes)}</textarea></td>
+      <td>${actionButtons(order)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="11" class="text-center text-muted py-4">No active customer orders.</td></tr>';
+}
+function render(payload) {
+  queuePayload = payload;
+  renderStats(payload.stats);
+  renderRows();
+}
+async function refreshStaffQueue() {
+  const response = await fetch("{% url 'staff_queue_data' %}");
+  render(await response.json());
+}
+async function runAction(id, action) {
+  const formData = new FormData();
+  formData.append('action', action);
+  const cashInput = document.querySelector(`.cash-received-input[data-id="${id}"]`);
+  if (cashInput) formData.append('cash_received', cashInput.value || '0');
+  const response = await fetch(`/pos/order-queue/${id}/action/`, {method: 'POST', headers: {'X-CSRFToken': csrfToken}, body: formData});
+  const data = await response.json();
+  if (!data.ok) { showToast('Action failed', data.error || 'Could not update order.'); return; }
+  await refreshStaffQueue();
+}
+async function saveNote(id, value) {
+  const formData = new FormData();
+  formData.append('staff_notes', value);
+  await fetch(`/pos/order-queue/${id}/notes/`, {method: 'POST', headers: {'X-CSRFToken': csrfToken}, body: formData});
+}
+function showDetails(id) {
+  const order = queuePayload.orders.find(item => item.id === Number(id));
+  if (!order) return;
+  document.getElementById('orderDetailsBody').innerHTML = `
+    <dl class="row customer-details-list">
+      <dt class="col-sm-4">Order Number</dt><dd class="col-sm-8">${text(order.order_number)}</dd>
+      <dt class="col-sm-4">Customer Name</dt><dd class="col-sm-8">${text(order.customer_name)}</dd>
+      <dt class="col-sm-4">Products</dt><dd class="col-sm-8">${productSummary(order)}</dd>
+      <dt class="col-sm-4">Special Instructions</dt><dd class="col-sm-8">${text(order.special_instructions) || '-'}</dd>
+      <dt class="col-sm-4">Payment Method</dt><dd class="col-sm-8">${text(order.payment_method)} ${text(order.online_payment_channel)}</dd>
+      <dt class="col-sm-4">Payment Status</dt><dd class="col-sm-8">${text(order.payment_status)}</dd>
+      <dt class="col-sm-4">Order Status</dt><dd class="col-sm-8">${text(order.order_status)}</dd>
+      <dt class="col-sm-4">Order Time</dt><dd class="col-sm-8">${text(order.created_at)}</dd>
+      <dt class="col-sm-4">Staff Notes</dt><dd class="col-sm-8">${text(order.staff_notes) || '-'}</dd>
+      <dt class="col-sm-4">Payment Proof</dt><dd class="col-sm-8">${order.payment_proof_url ? `<a href="${order.payment_proof_url}" target="_blank">Open proof</a>` : '-'}</dd>
+    </dl>`;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('orderDetailsModal')).show();
+}
+document.getElementById('staffQueueRows').addEventListener('click', event => {
+  const actionButton = event.target.closest('[data-action]');
+  const detailButton = event.target.closest('[data-detail]');
+  if (actionButton) runAction(actionButton.dataset.id, actionButton.dataset.action);
+  if (detailButton) showDetails(detailButton.dataset.detail);
+});
+document.getElementById('staffQueueRows').addEventListener('input', event => {
+  const cashInput = event.target.closest('.cash-received-input');
+  if (!cashInput) return;
+  cashDrafts[cashInput.dataset.id] = cashInput.value;
+  const change = Math.max(Number(cashInput.value || 0) - Number(cashInput.dataset.total || 0), 0);
+  const target = document.querySelector(`[data-change-for="${cashInput.dataset.id}"]`);
+  if (target) target.innerHTML = money(change);
+});
+document.getElementById('staffQueueRows').addEventListener('change', event => {
+  const note = event.target.closest('.staff-note');
+  if (note) saveNote(note.dataset.id, note.value);
+});
+['statusFilter', 'paymentFilter', 'queueSearch'].forEach(id => document.getElementById(id).addEventListener('input', renderRows));
+document.getElementById('refreshStaffQueue').addEventListener('click', refreshStaffQueue);
+function connectStaffSocket(){
+  const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${scheme}://${window.location.host}/ws/staff-queue/`);
+  socket.onmessage = event => {
+    const data = JSON.parse(event.data);
+    render(data.payload || data);
+    if (data.new_order) {
+      document.getElementById('queueSound')?.play().catch(() => {});
+      showToast('New Customer Order Received', 'A new self-order is waiting in the queue.');
+    }
+  };
+  socket.onerror = () => socket.close();
+}
+try { connectStaffSocket(); } catch (err) {}
+setInterval(refreshStaffQueue, 5000);
+render(queuePayload);
+</script>
+{% endblock %}

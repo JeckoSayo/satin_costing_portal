@@ -1,0 +1,421 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Satin Customer Order</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'costing/css/style.css' %}">
+</head>
+<body class="customer-order-body">
+  <input type="hidden" id="csrfToken" value="{{ csrf_token }}">
+  <main class="customer-order-shell">
+    <header class="customer-hero">
+      <div class="customer-brand">
+        <img src="{% static 'costing/img/SATIN.png' %}" alt="Satin Creative Studio">
+        <div>
+          <strong>Satin Creative Studio</strong>
+          <span>Self Ordering</span>
+        </div>
+      </div>
+      <div class="customer-hero-copy">
+        <h1>Order at your own pace</h1>
+        <p>Choose your drinks, treats, stickers, and add-ons. We will call your order number when it is ready.</p>
+      </div>
+    </header>
+
+    <section class="customer-queue-band">
+      <div class="customer-stat-grid">
+        <div><span>Preparing Orders</span><strong id="statPreparing">{{ queue_payload.stats.preparing_orders }}</strong></div>
+        <div><span>Ready for Pickup</span><strong id="statReady">{{ queue_payload.stats.ready_for_pickup }}</strong></div>
+        <div><span>Waiting Payment</span><strong id="statWaiting">{{ queue_payload.stats.waiting_payment }}</strong></div>
+        <div><span>Estimated Wait</span><strong><span id="statEta">{{ queue_payload.stats.estimated_wait_minutes }}</span> min</strong></div>
+      </div>
+      <div class="customer-current-queue">
+        <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+          <h2>Current Queue</h2>
+          <small>Latest 5 active orders</small>
+        </div>
+        <div id="publicQueueList" class="customer-queue-list"></div>
+      </div>
+    </section>
+
+    <section class="customer-order-grid">
+      <div class="customer-menu-panel">
+        <div class="customer-section-head">
+          <h2>Menu</h2>
+          <span>Tap products to add them</span>
+        </div>
+        <ul class="nav nav-pills customer-tabs" role="tablist">
+          {% for group in product_groups %}
+            <li class="nav-item" role="presentation">
+              <button class="nav-link {% if forloop.first %}active{% endif %}" data-bs-toggle="pill" data-bs-target="#customer-category-{{ group.category.id }}" type="button">
+                {{ group.category.name }}
+              </button>
+            </li>
+          {% endfor %}
+        </ul>
+        <div class="tab-content mt-3">
+          {% for group in product_groups %}
+            <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="customer-category-{{ group.category.id }}">
+              <div class="customer-product-grid">
+                {% for product in group.products %}
+                  <button type="button" class="customer-product-tile"
+                          data-product-id="{{ product.id }}"
+                          data-name="{{ product.name }}"
+                          data-description="{{ product.description|default:''|escapejs }}"
+                          data-price="{{ product.price }}"
+                          data-promo-qty="{{ product.promo_bundle_qty }}"
+                          data-promo-price="{{ product.promo_bundle_price }}"
+                          data-allow-addons="{% if product.allow_addons %}true{% else %}false{% endif %}"
+                          data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}">
+                    {% if product.image %}
+                      <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                    {% else %}
+                      <span class="customer-product-placeholder"><i class="bi bi-cup-hot"></i></span>
+                    {% endif %}
+                    <span>{{ product.name }}</span>
+                    <small>{{ product.description|default:"Fresh from Satin"|truncatechars:70 }}</small>
+                    <strong>&#8369;{{ product.price|floatformat:2 }}</strong>
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+          {% empty %}
+            <div class="text-center text-muted py-5">No active products yet.</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <aside class="customer-cart-panel">
+        <div class="customer-section-head">
+          <h2>Your Order</h2>
+          <button class="btn btn-sm btn-outline-secondary" id="clearCartBtn" type="button"><i class="bi bi-trash"></i></button>
+        </div>
+
+        <div class="row g-2">
+          <div class="col-12">
+            <label class="form-label">Customer Name <span class="text-danger">*</span></label>
+            <input class="form-control form-control-lg" id="customerNameInput" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Contact Number</label>
+            <input class="form-control" id="contactNumberInput" inputmode="tel">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Special Instructions</label>
+            <textarea class="form-control" id="specialInstructionsInput" rows="2" placeholder="Less sweet, no ice, extra ice, separate packaging"></textarea>
+          </div>
+        </div>
+
+        <div id="customerCartLines" class="customer-cart-lines">
+          <div class="text-center text-muted py-4">Your cart is empty.</div>
+        </div>
+
+        <div class="customer-payment-box">
+          <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+          <div class="customer-payment-choice">
+            <label><input type="radio" name="paymentMethod" value="Cash"> Cash</label>
+            <label><input type="radio" name="paymentMethod" value="Online Payment"> Online Payment</label>
+          </div>
+          <div id="onlinePaymentPanel" class="customer-online-panel d-none">
+            <select class="form-select mb-2" id="onlineChannelInput">
+              <option value="">Choose online payment</option>
+              <option value="GCash">GCash</option>
+              <option value="Maya">Maya</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+            <div class="customer-qr-grid">
+              <div data-channel="GCash">{% if settings.gcash_qr %}<img src="{{ settings.gcash_qr.url }}" alt="GCash QR">{% endif %}<p>{{ settings.gcash_instructions|cut:" and upload your payment proof"|cut:" upload your payment proof"|cut:" and upload your payment proof." }}</p></div>
+              <div data-channel="Maya">{% if settings.maya_qr %}<img src="{{ settings.maya_qr.url }}" alt="Maya QR">{% endif %}<p>{{ settings.maya_instructions|cut:" and upload your payment proof"|cut:" upload your payment proof"|cut:" and upload your payment proof." }}</p></div>
+              <div data-channel="Bank Transfer">{% if settings.bank_qr %}<img src="{{ settings.bank_qr.url }}" alt="Bank QR">{% endif %}<p>{{ settings.bank_instructions|cut:" and upload your payment proof"|cut:" upload your payment proof"|cut:" and upload your payment proof." }}</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="customer-cart-total">
+          <span>Total</span>
+          <strong id="customerTotal">&#8369;0.00</strong>
+        </div>
+        <button class="btn customer-submit-btn" id="reviewOrderBtn" type="button">Review Order</button>
+      </aside>
+    </section>
+  </main>
+
+  <div class="modal fade" id="summaryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Confirm Order</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body" id="summaryBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Back</button>
+          <button class="btn customer-submit-btn" id="confirmOrderBtn" type="button">Confirm Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="successModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body text-center p-4">
+          <h2 class="mb-3">Your order has been submitted successfully.</h2>
+          <p id="successPaymentMessage">Please proceed to the cashier to pay your order.</p>
+          <div class="customer-success-number">
+            <span>Order Number</span>
+            <strong id="successOrderNumber"></strong>
+          </div>
+          <p class="mt-3 mb-0">Estimated Wait Time: Approximately <strong id="successEta"></strong> Minutes</p>
+          <button class="btn customer-submit-btn mt-4" data-bs-dismiss="modal" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-ui-stack" id="customerToastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  const addons = [{% for addon in addons %}{id: {{ addon.id }}, name: "{{ addon.name|escapejs }}", price: Number("{{ addon.price }}")}{% if not forloop.last %},{% endif %}{% endfor %}];
+  let cart = [];
+  let selectedLineId = null;
+  let trackedOrderNumber = "";
+  let successModalTimer = null;
+  let customerToastTimer = null;
+  const csrfToken = document.getElementById('csrfToken').value;
+  const money = value => `&#8369;${Number(value || 0).toFixed(2)}`;
+  const text = value => String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+  function hideCustomerToast() {
+    const stack = document.getElementById('customerToastStack');
+    if (!stack) return;
+    stack.innerHTML = '';
+    if (customerToastTimer) {
+      clearTimeout(customerToastTimer);
+      customerToastTimer = null;
+    }
+  }
+  function showCustomerToast(title, message, tone = 'warning') {
+    const stack = document.getElementById('customerToastStack');
+    if (!stack) return;
+    const isSuccess = tone === 'success';
+    const cardClass = isSuccess ? 'toast-ui-success' : 'toast-ui-warning';
+    const icon = isSuccess ? 'bi-check-lg' : 'bi-exclamation-lg';
+    const buttonClass = isSuccess ? 'toast-ui-confirm' : 'toast-ui-danger';
+    stack.innerHTML = `
+      <div class="toast-ui-card ${cardClass}" role="alert">
+        <div class="toast-ui-accent"></div>
+        <div class="toast-ui-icon"><i class="bi ${icon}"></i></div>
+        <div class="toast-ui-content">
+          <strong>${text(title)}</strong>
+          <span>${text(message)}</span>
+          <div class="toast-ui-actions">
+            <button type="button" class="btn ${buttonClass}" data-customer-toast-close>OK</button>
+          </div>
+        </div>
+        <button type="button" class="toast-ui-close" data-customer-toast-close aria-label="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    `;
+    stack.querySelectorAll('[data-customer-toast-close]').forEach(button => {
+      button.addEventListener('click', hideCustomerToast);
+    });
+    customerToastTimer = setTimeout(hideCustomerToast, 7000);
+  }
+  function lineKey(id){ return `${id}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+  function baseTotal(item){
+    if (item.promoQty && item.promoPrice && item.quantity >= item.promoQty) {
+      return Math.floor(item.quantity / item.promoQty) * item.promoPrice + (item.quantity % item.promoQty) * item.price;
+    }
+    return item.price * item.quantity;
+  }
+  function total(){ return cart.reduce((sum, item) => sum + baseTotal(item) + item.addons.reduce((a, addon) => a + addon.price * addon.quantity, 0), 0); }
+  function renderCart(){
+    const target = document.getElementById('customerCartLines');
+    if (!cart.length) {
+      target.innerHTML = '<div class="text-center text-muted py-4">Your cart is empty.</div>';
+      document.getElementById('customerTotal').innerHTML = money(0);
+      return;
+    }
+    target.innerHTML = cart.map(item => `
+      <div class="customer-cart-line ${selectedLineId === item.lineId ? 'selected' : ''}" data-line-id="${item.lineId}">
+        <div>
+          <strong>${text(item.name)}</strong>
+          ${item.addons.map(addon => `
+            <small class="customer-addon-pill">
+              + ${addon.quantity} ${text(addon.name)}
+              <button type="button" data-addon-action="decrease" data-addon-id="${addon.product_id}" data-line-id="${item.lineId}">-</button>
+              <button type="button" data-addon-action="increase" data-addon-id="${addon.product_id}" data-line-id="${item.lineId}">+</button>
+            </small>
+          `).join('')}
+        </div>
+        <div class="customer-qty"><button data-action="minus">-</button><span>${item.quantity}</span><button data-action="plus">+</button></div>
+        <b>${money(baseTotal(item) + item.addons.reduce((sum, addon) => sum + addon.price * addon.quantity, 0))}</b>
+        <button class="btn btn-sm btn-outline-danger" data-action="remove"><i class="bi bi-x-lg"></i></button>
+      </div>
+      ${item.allowAddons ? `<div class="customer-line-addons">${addons.map(addon => `<button class="btn btn-sm btn-outline-primary" data-line-id="${item.lineId}" data-addon-id="${addon.id}">+ ${text(addon.name)}</button>`).join('')}</div>` : ''}
+    `).join('');
+    document.getElementById('customerTotal').innerHTML = money(total());
+  }
+  document.querySelectorAll('.customer-product-tile').forEach(button => {
+    button.addEventListener('click', () => {
+      const item = {
+        lineId: lineKey(button.dataset.productId),
+        productId: Number(button.dataset.productId),
+        name: button.dataset.name,
+        price: Number(button.dataset.price),
+        promoQty: Number(button.dataset.promoQty || 0),
+        promoPrice: Number(button.dataset.promoPrice || 0),
+        allowAddons: button.dataset.allowAddons === 'true',
+        quantity: 1,
+        addons: []
+      };
+      cart.push(item);
+      selectedLineId = item.lineId;
+      renderCart();
+    });
+  });
+  function addAddon(lineId, addonId){
+    const line = cart.find(item => item.lineId === lineId);
+    const addon = addons.find(item => item.id === Number(addonId));
+    if (!line || !addon || !line.allowAddons) return;
+    const existing = line.addons.find(item => item.product_id === addon.id);
+    if (existing) existing.quantity += 1;
+    else line.addons.push({product_id: addon.id, name: addon.name, price: addon.price, quantity: 1});
+    renderCart();
+  }
+  function changeAddon(lineId, addonId, delta){
+    const line = cart.find(item => item.lineId === lineId);
+    if (!line) return;
+    const addon = line.addons.find(item => item.product_id === Number(addonId));
+    if (!addon) return;
+    addon.quantity += delta;
+    if (addon.quantity <= 0) {
+      line.addons = line.addons.filter(item => item.product_id !== Number(addonId));
+    }
+    renderCart();
+  }
+  document.getElementById('customerCartLines').addEventListener('click', event => {
+    const addonControl = event.target.closest('[data-addon-action]');
+    if (addonControl) {
+      changeAddon(
+        addonControl.dataset.lineId,
+        addonControl.dataset.addonId,
+        addonControl.dataset.addonAction === 'increase' ? 1 : -1
+      );
+      return;
+    }
+    const addonButton = event.target.closest('[data-addon-id]');
+    if (addonButton) { addAddon(addonButton.dataset.lineId, addonButton.dataset.addonId); return; }
+    const lineEl = event.target.closest('[data-line-id]');
+    if (!lineEl) return;
+    const line = cart.find(item => item.lineId === lineEl.dataset.lineId);
+    selectedLineId = lineEl.dataset.lineId;
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'minus') line.quantity = Math.max(line.quantity - 1, 1);
+    if (action === 'plus') line.quantity += 1;
+    if (action === 'remove') cart = cart.filter(item => item.lineId !== line.lineId);
+    renderCart();
+  });
+  function resetCustomerOrderForm(){
+    cart = [];
+    selectedLineId = null;
+    document.getElementById('customerNameInput').value = '';
+    document.getElementById('contactNumberInput').value = '';
+    document.getElementById('specialInstructionsInput').value = '';
+    document.getElementById('onlineChannelInput').value = '';
+    document.getElementById('onlinePaymentPanel').classList.add('d-none');
+    document.querySelectorAll('input[name="paymentMethod"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.customer-qr-grid > div').forEach(row => row.classList.remove('active'));
+    renderCart();
+  }
+  document.getElementById('clearCartBtn').addEventListener('click', resetCustomerOrderForm);
+  document.querySelectorAll('input[name="paymentMethod"]').forEach(input => input.addEventListener('change', () => {
+    document.getElementById('onlinePaymentPanel').classList.toggle('d-none', input.value !== 'Online Payment' || !input.checked);
+  }));
+  document.getElementById('onlineChannelInput').addEventListener('change', event => {
+    document.querySelectorAll('.customer-qr-grid > div').forEach(row => row.classList.toggle('active', row.dataset.channel === event.target.value));
+  });
+  function validateOrder(){
+    const name = document.getElementById('customerNameInput').value.trim();
+    const payment = document.querySelector('input[name="paymentMethod"]:checked')?.value;
+    if (!name) return "Customer name is required.";
+    if (!cart.length) return "Please select at least one product.";
+    if (!payment) return "Please choose a payment method.";
+    if (payment === 'Online Payment' && !document.getElementById('onlineChannelInput').value) return "Please choose GCash, Maya, or Bank Transfer.";
+    return "";
+  }
+  document.getElementById('reviewOrderBtn').addEventListener('click', () => {
+    const error = validateOrder();
+    if (error) { showCustomerToast('Order needs attention', error); return; }
+    const payment = document.querySelector('input[name="paymentMethod"]:checked').value;
+    document.getElementById('summaryBody').innerHTML = `
+      <dl class="row customer-summary-list">
+        <dt class="col-sm-4">Customer Name</dt><dd class="col-sm-8">${text(document.getElementById('customerNameInput').value)}</dd>
+        <dt class="col-sm-4">Products</dt><dd class="col-sm-8">${cart.map(item => `${item.quantity} x ${text(item.name)} ${item.addons.map(addon => `(+${addon.quantity} ${text(addon.name)})`).join(' ')}`).join('<br>')}</dd>
+        <dt class="col-sm-4">Subtotal</dt><dd class="col-sm-8">${money(total())}</dd>
+        <dt class="col-sm-4">Total</dt><dd class="col-sm-8"><strong>${money(total())}</strong></dd>
+        <dt class="col-sm-4">Payment Method</dt><dd class="col-sm-8">${payment}${payment === 'Online Payment' ? ' - ' + text(document.getElementById('onlineChannelInput').value) : ''}</dd>
+        <dt class="col-sm-4">Special Instructions</dt><dd class="col-sm-8">${text(document.getElementById('specialInstructionsInput').value) || '-'}</dd>
+      </dl>`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('summaryModal')).show();
+  });
+  document.getElementById('confirmOrderBtn').addEventListener('click', async () => {
+    const payment = document.querySelector('input[name="paymentMethod"]:checked').value;
+    const payload = {
+      customer_name: document.getElementById('customerNameInput').value,
+      contact_number: document.getElementById('contactNumberInput').value,
+      special_instructions: document.getElementById('specialInstructionsInput').value,
+      payment_method: payment,
+      online_payment_channel: payment === 'Online Payment' ? document.getElementById('onlineChannelInput').value : '',
+      items: cart.map(item => ({product_id: item.productId, quantity: item.quantity, addons: item.addons.map(addon => ({product_id: addon.product_id, quantity: addon.quantity}))}))
+    };
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
+    const response = await fetch("{% url 'customer_order_create' %}", {method: 'POST', headers: {'X-CSRFToken': csrfToken}, body: formData});
+    const data = await response.json();
+    if (!data.ok) { showCustomerToast('Order not submitted', data.error || 'Could not submit order.'); return; }
+    trackedOrderNumber = data.order_number;
+    document.getElementById('successOrderNumber').textContent = data.order_number;
+    document.getElementById('successEta').textContent = data.estimated_wait_minutes;
+    document.getElementById('successPaymentMessage').textContent = payment === 'Cash' ? 'Please proceed to the cashier to pay your order.' : 'Your payment is waiting for staff verification.';
+    bootstrap.Modal.getInstance(document.getElementById('summaryModal')).hide();
+    const successModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('successModal'));
+    successModal.show();
+    resetCustomerOrderForm();
+    refreshQueue();
+    if (successModalTimer) clearTimeout(successModalTimer);
+    successModalTimer = setTimeout(() => successModal.hide(), 1000);
+  });
+  function renderQueue(payload){
+    document.getElementById('statPreparing').textContent = payload.stats.preparing_orders;
+    document.getElementById('statReady').textContent = payload.stats.ready_for_pickup;
+    document.getElementById('statWaiting').textContent = payload.stats.waiting_payment;
+    document.getElementById('statEta').textContent = payload.stats.estimated_wait_minutes;
+    document.getElementById('publicQueueList').innerHTML = payload.orders.length ? payload.orders.map(order => `
+      <div class="customer-queue-row ${order.status_class}">
+        <span>${text(order.order_number)}</span><strong>${text(order.order_status)}</strong>${order.is_tracked ? '<b>YOUR ORDER</b>' : ''}
+      </div>`).join('') : '<div class="text-muted py-3">No active orders yet.</div>';
+  }
+  async function refreshQueue(){
+    const response = await fetch(`{% url 'customer_queue_data' %}?order=${encodeURIComponent(trackedOrderNumber)}`);
+    renderQueue(await response.json());
+  }
+  function connectQueueSocket(){
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${scheme}://${window.location.host}/ws/customer-queue/`);
+    socket.onmessage = event => renderQueue(JSON.parse(event.data).payload || JSON.parse(event.data));
+    socket.onerror = () => socket.close();
+  }
+  try { connectQueueSocket(); } catch (err) {}
+  setInterval(refreshQueue, 5000);
+  renderQueue({{ queue_payload_json|safe }});
+  renderCart();
+  </script>
+</body>
+</html>

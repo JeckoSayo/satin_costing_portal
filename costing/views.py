@@ -61,9 +61,11 @@ from .models import (
     POSOrderItem,
     POSOrderItemAddon,
     POSQueueItem,
+    CustomerOrder,
+    CustomerOrderingSetting,
     SmartPasteInquiry,
 )
-from .services import calculate_quote, create_sale_from_order_items, reverse_sale_inventory, calculate_product_preset_quote, save_product_quote, create_smart_paste_inquiry
+from .services import calculate_quote, create_sale_from_order_items, reverse_sale_inventory, calculate_product_preset_quote, save_product_quote, create_smart_paste_inquiry, create_customer_order, complete_customer_order, get_customer_queue_payload, get_staff_queue_payload, get_customer_ordering_settings, broadcast_customer_queue_update, broadcast_staff_queue_update, broadcast_notification
 from django.db.models import Sum, F, Count, Q, Max, Case, When, IntegerField
 from django.db import transaction
 from django.utils import timezone
@@ -1682,6 +1684,183 @@ def serialize_queue_item(queue_item):
     }
 
 
+class CustomerOrderPageView(TemplateView):
+    template_name = "costing/customer_order.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        categories = (
+            POSCategory.objects.filter(is_active=True)
+            .annotate(
+                sort_order=Case(
+                    When(category_type=POSCategory.TYPE_DRINK, then=1),
+                    When(category_type=POSCategory.TYPE_COOKIE, then=2),
+                    When(category_type=POSCategory.TYPE_STICKER, then=3),
+                    default=4,
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("sort_order", "name")
+        )
+        products = POSProduct.objects.filter(is_active=True, category__is_active=True).select_related("category")
+        ctx["product_groups"] = [
+            {
+                "category": category,
+                "products": [product for product in products if product.category_id == category.id and not product.is_addon],
+            }
+            for category in categories
+            if any(product.category_id == category.id and not product.is_addon for product in products)
+        ]
+        ctx["addons"] = list(products.filter(category__category_type=POSCategory.TYPE_ADDON))
+        ctx["settings"] = get_customer_ordering_settings()
+        queue_payload = get_customer_queue_payload(self.request.GET.get("order", ""))
+        ctx["queue_payload"] = queue_payload
+        ctx["queue_payload_json"] = json.dumps(queue_payload)
+        return ctx
+
+
+class CustomerOrderCreateView(View):
+    def post(self, request):
+        try:
+            payload = json.loads(request.POST.get("payload") or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": "Invalid order payload."}, status=400)
+
+        try:
+            order = create_customer_order(payload, files=request.FILES)
+        except (ValueError, POSProduct.DoesNotExist) as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+        broadcast_customer_queue_update()
+        broadcast_staff_queue_update(new_order=True)
+        broadcast_notification("New Customer Order Received", f"{order.order_number} from {order.customer_name}.", level="info", event="customer_order.created")
+
+        return JsonResponse({
+            "ok": True,
+            "order_number": order.order_number,
+            "order_status": order.order_status,
+            "payment_status": order.payment_status,
+            "estimated_wait_minutes": get_customer_queue_payload(order.order_number)["stats"]["estimated_wait_minutes"],
+            "message": "Your order has been submitted successfully.",
+        })
+
+
+class CustomerQueueDataView(View):
+    def get(self, request):
+        return JsonResponse(get_customer_queue_payload(request.GET.get("order", "")))
+
+
+class CustomerOrderQueueView(TemplateView):
+    template_name = "costing/customer_order_queue.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["payload"] = json.dumps(get_staff_queue_payload())
+        ctx["payment_choices"] = CustomerOrder.PAYMENT_STATUS_CHOICES
+        ctx["status_choices"] = CustomerOrder.ORDER_STATUS_CHOICES
+        ctx["settings"] = get_customer_ordering_settings()
+        return ctx
+
+
+class StaffQueueDataView(View):
+    def get(self, request):
+        return JsonResponse(get_staff_queue_payload())
+
+
+class CustomerOrderActionView(View):
+    def post(self, request, pk):
+        order = get_object_or_404(CustomerOrder, pk=pk)
+        action = request.POST.get("action")
+        now = timezone.now()
+        old_status = order.order_status
+        old_payment = order.payment_status
+
+        try:
+            if action == "mark_paid":
+                if order.payment_method == CustomerOrder.PAYMENT_METHOD_CASH:
+                    cash_received = clean_decimal(request.POST.get("cash_received"), "0")
+                    if cash_received < order.total_amount:
+                        return JsonResponse({"ok": False, "error": "Cash received is not enough for this order."}, status=400)
+                    order.cash_received = cash_received
+                    order.change_amount = max(cash_received - order.total_amount, Decimal("0.00"))
+                order.payment_status = CustomerOrder.PAYMENT_PAID
+                order.paid_at = order.paid_at or now
+                if order.order_status in [CustomerOrder.STATUS_PENDING_PAYMENT, CustomerOrder.STATUS_PENDING_VERIFICATION]:
+                    order.order_status = CustomerOrder.STATUS_PREPARING
+                    order.preparing_at = order.preparing_at or now
+            elif action == "verify_payment":
+                order.payment_status = CustomerOrder.PAYMENT_PAID
+                order.paid_at = order.paid_at or now
+                order.order_status = CustomerOrder.STATUS_PREPARING
+                order.preparing_at = order.preparing_at or now
+            elif action == "preparing":
+                order.order_status = CustomerOrder.STATUS_PREPARING
+                order.preparing_at = order.preparing_at or now
+            elif action == "ready":
+                order.order_status = CustomerOrder.STATUS_READY
+                order.ready_at = order.ready_at or now
+            elif action == "completed":
+                if order.payment_status != CustomerOrder.PAYMENT_PAID:
+                    return JsonResponse({"ok": False, "error": "Mark payment as paid first."}, status=400)
+                complete_customer_order(order, user=request.user if request.user.is_authenticated else None)
+            elif action == "cancel":
+                order.order_status = CustomerOrder.STATUS_CANCELLED
+                order.cancelled_at = order.cancelled_at or now
+            elif action == "refund":
+                order.payment_status = CustomerOrder.PAYMENT_REFUNDED
+                order.refunded_at = order.refunded_at or now
+                if order.pos_order:
+                    order.pos_order.payment_status = POSOrder.PAYMENT_VOID
+                    order.pos_order.save(update_fields=["payment_status"])
+            else:
+                return JsonResponse({"ok": False, "error": "Invalid action."}, status=400)
+
+            if action != "completed":
+                update_fields = ["payment_status", "order_status", "cash_received", "change_amount", "paid_at", "preparing_at", "ready_at", "cancelled_at", "refunded_at", "updated_at"]
+                order.save(update_fields=update_fields)
+            if order.order_status != old_status:
+                from .models import OrderStatusHistory
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    old_status=old_status,
+                    new_status=order.order_status,
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    note=f"Staff action: {action}",
+                )
+            if order.payment_status != old_payment:
+                payment = order.payments.first()
+                if payment:
+                    payment.status = order.payment_status
+                    if order.payment_status == CustomerOrder.PAYMENT_PAID:
+                        payment.verified_by = request.user if request.user.is_authenticated else None
+                        payment.verified_at = payment.verified_at or now
+                    payment.save(update_fields=["status", "verified_by", "verified_at"])
+        except ValueError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+        broadcast_customer_queue_update()
+        broadcast_staff_queue_update()
+        return JsonResponse({"ok": True, "order": get_staff_queue_payload()})
+
+
+class CustomerOrderNotesView(View):
+    def post(self, request, pk):
+        order = get_object_or_404(CustomerOrder, pk=pk)
+        order.staff_notes = request.POST.get("staff_notes", "")
+        order.save(update_fields=["staff_notes", "updated_at"])
+        broadcast_staff_queue_update()
+        return JsonResponse({"ok": True})
+
+
+class CustomerOrderReceiptRedirectView(View):
+    def get(self, request, pk):
+        order = get_object_or_404(CustomerOrder, pk=pk)
+        if not order.pos_order_id:
+            messages.error(request, "Complete this customer order before printing a receipt.")
+            return redirect("customer_order_queue")
+        return redirect("pos_receipt", pk=order.pos_order_id)
+
+
 class FastPOSView(TemplateView):
     """Full retail POS for matcha drinks, stickers, cookies, add-ons, and the barista queue."""
     template_name = "costing/fast_pos.html"
@@ -1882,11 +2061,15 @@ class POSSalesDashboardView(TemplateView):
         orders = POSOrder.objects.filter(
             created_at__date__gte=start,
             created_at__date__lte=end,
+            payment_status=POSOrder.PAYMENT_PAID,
         ).order_by("-created_at")
         items = POSOrderItem.objects.filter(order__in=orders)
         addons = POSOrderItemAddon.objects.filter(order_item__order__in=orders)
         total_sales = orders.aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
         total_orders = orders.count()
+        walkin_sales = orders.filter(source=POSOrder.SOURCE_WALKIN).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        tablet_sales = orders.filter(source=POSOrder.SOURCE_TABLET).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
+        online_sales = orders.filter(source=POSOrder.SOURCE_ONLINE).aggregate(total=Sum("total_amount"))["total"] or Decimal("0.00")
         category_rows = (
             items.values("category_type", "category_name")
             .annotate(qty=Sum("quantity"), revenue=Sum("line_total"))
@@ -1918,6 +2101,10 @@ class POSSalesDashboardView(TemplateView):
             "start": start,
             "end": end,
             "total_sales": total_sales,
+            "walkin_sales": walkin_sales,
+            "tablet_sales": tablet_sales,
+            "online_sales": online_sales,
+            "completed_orders_today": orders.filter(created_at__date=timezone.localdate()).count(),
             "total_orders": total_orders,
             "total_drinks_sold": items.filter(category_type=POSCategory.TYPE_DRINK).aggregate(qty=Sum("quantity"))["qty"] or 0,
             "total_stickers_sold": items.filter(category_type=POSCategory.TYPE_STICKER).aggregate(qty=Sum("quantity"))["qty"] or 0,

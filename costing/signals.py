@@ -3,7 +3,7 @@ from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from . import services
-from .models import ExpenseLog, Material, SaleLog, ShopTask, StockMovement, StockPurchase
+from .models import CustomerOrder, ExpenseLog, Material, SaleLog, ShopTask, StockMovement, StockPurchase
 
 
 def _after_commit(callback):
@@ -116,3 +116,9 @@ def broadcast_stock_purchase_saved(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=ExpenseLog)
 def broadcast_expense_changed(sender, instance, **kwargs):
     _after_commit(services.broadcast_dashboard_update)
+
+
+@receiver(post_save, sender=CustomerOrder)
+@receiver(post_delete, sender=CustomerOrder)
+def broadcast_customer_order_changed(sender, instance, **kwargs):
+    _after_commit(lambda: (services.broadcast_customer_queue_update(), services.broadcast_staff_queue_update()))

@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, ROUND_UP
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Max, Sum
 from .models import (
     Material,
     PaperSize,
@@ -14,6 +14,18 @@ from .models import (
     ProductPreset,
     ProductPriceTier,
     CraftQuote,
+    POSCategory,
+    POSProduct,
+    POSOrder,
+    POSOrderItem,
+    POSOrderItemAddon,
+    CustomerOrderingSetting,
+    CustomerOrder,
+    CustomerOrderItem,
+    CustomerOrderItemAddon,
+    OrderPayment,
+    OrderStatusHistory,
+    OrderNotification,
 )
 
 
@@ -1011,6 +1023,8 @@ REALTIME_DASHBOARD_GROUP = "costing.dashboard"
 REALTIME_NOTIFICATION_GROUP = "costing.notifications"
 REALTIME_INVENTORY_GROUP = "costing.inventory"
 REALTIME_SALES_GROUP = "costing.sales"
+REALTIME_CUSTOMER_QUEUE_GROUP = "costing.customer_queue"
+REALTIME_STAFF_QUEUE_GROUP = "costing.staff_queue"
 
 
 def _channel_layer():
@@ -1037,6 +1051,273 @@ def _send_group(group_name, payload):
 
 def _decimal_to_float(value):
     return float(value or 0)
+
+
+def get_customer_ordering_settings():
+    obj, _ = CustomerOrderingSetting.objects.get_or_create(id=1)
+    return obj
+
+
+def active_customer_orders():
+    return CustomerOrder.objects.exclude(
+        order_status__in=[CustomerOrder.STATUS_COMPLETED, CustomerOrder.STATUS_CANCELLED]
+    )
+
+
+def customer_queue_stats():
+    settings = get_customer_ordering_settings()
+    active = active_customer_orders()
+    preparing = active.filter(order_status=CustomerOrder.STATUS_PREPARING).count()
+    return {
+        "preparing_orders": preparing,
+        "ready_for_pickup": active.filter(order_status=CustomerOrder.STATUS_READY).count(),
+        "waiting_payment": active.filter(order_status=CustomerOrder.STATUS_PENDING_PAYMENT).count(),
+        "waiting_verification": active.filter(order_status=CustomerOrder.STATUS_PENDING_VERIFICATION).count(),
+        "average_preparation_minutes": settings.average_preparation_minutes,
+        "estimated_wait_minutes": preparing * settings.average_preparation_minutes,
+    }
+
+
+def serialize_customer_queue_order(order, include_private=False, tracked_order_number=""):
+    status_classes = {
+        CustomerOrder.STATUS_PENDING_PAYMENT: "queue-status-payment",
+        CustomerOrder.STATUS_PENDING_VERIFICATION: "queue-status-verification",
+        CustomerOrder.STATUS_PREPARING: "queue-status-preparing",
+        CustomerOrder.STATUS_READY: "queue-status-ready",
+    }
+    row = {
+        "id": order.id,
+        "order_number": order.order_number,
+        "order_status": order.order_status,
+        "payment_status": order.payment_status,
+        "status_class": status_classes.get(order.order_status, "queue-status-muted"),
+        "created_at": order.created_at.strftime("%m/%d/%y %I:%M %p") if order.created_at else "",
+        "is_tracked": bool(tracked_order_number and order.order_number == tracked_order_number),
+    }
+    if include_private:
+        row.update({
+            "customer_name": order.customer_name,
+            "contact_number": order.contact_number,
+            "special_instructions": order.special_instructions,
+            "payment_method": order.payment_method,
+            "online_payment_channel": order.online_payment_channel,
+            "total_amount": _decimal_to_float(order.total_amount),
+            "cash_received": _decimal_to_float(order.cash_received),
+            "change_amount": _decimal_to_float(order.change_amount),
+            "staff_notes": order.staff_notes,
+            "payment_proof_url": order.payment_proof.url if order.payment_proof else "",
+            "actual_processing_minutes": order.actual_processing_minutes,
+            "items": [
+                {
+                    "product_name": item.product_name,
+                    "quantity": item.quantity,
+                    "line_total": _decimal_to_float(item.line_total),
+                    "addons": [
+                        {
+                            "addon_name": addon.addon_name,
+                            "quantity": addon.quantity,
+                            "line_total": _decimal_to_float(addon.line_total),
+                        }
+                        for addon in item.addons.all()
+                    ],
+                }
+                for item in order.items.prefetch_related("addons").all()
+            ],
+        })
+    return row
+
+
+def get_customer_queue_payload(tracked_order_number=""):
+    orders = active_customer_orders().order_by("created_at")[:5]
+    return {
+        "stats": customer_queue_stats(),
+        "orders": [serialize_customer_queue_order(order, tracked_order_number=tracked_order_number) for order in orders],
+    }
+
+
+def get_staff_queue_payload():
+    today = _timezone.localdate()
+    orders = active_customer_orders().prefetch_related("items__addons").order_by("created_at")
+    completed_today = CustomerOrder.objects.filter(order_status=CustomerOrder.STATUS_COMPLETED, completed_at__date=today)
+    paid_completed_today = completed_today.filter(payment_status=CustomerOrder.PAYMENT_PAID)
+    processing = [
+        order.actual_processing_minutes
+        for order in completed_today
+        if order.actual_processing_minutes is not None
+    ]
+    return {
+        "stats": {
+            "pending_payment": orders.filter(order_status=CustomerOrder.STATUS_PENDING_PAYMENT).count(),
+            "waiting_verification": orders.filter(order_status=CustomerOrder.STATUS_PENDING_VERIFICATION).count(),
+            "preparing": orders.filter(order_status=CustomerOrder.STATUS_PREPARING).count(),
+            "ready": orders.filter(order_status=CustomerOrder.STATUS_READY).count(),
+            "completed_today": completed_today.count(),
+            "total_orders_today": CustomerOrder.objects.filter(created_at__date=today).count(),
+            "total_revenue_today": _decimal_to_float(paid_completed_today.aggregate(total=Sum("total_amount"))["total"]),
+            "average_wait_time": round(sum(processing) / len(processing), 1) if processing else 0,
+            "fastest_order_today": min(processing) if processing else 0,
+            "slowest_order_today": max(processing) if processing else 0,
+            "current_queue_wait_time": customer_queue_stats()["estimated_wait_minutes"],
+        },
+        "orders": [serialize_customer_queue_order(order, include_private=True) for order in orders],
+    }
+
+
+@transaction.atomic
+def create_customer_order(payload, files=None):
+    files = files or {}
+    items = payload.get("items") or []
+    if not items:
+        raise ValueError("Please add at least one product.")
+    customer_name = str(payload.get("customer_name") or "").strip()
+    if not customer_name:
+        raise ValueError("Customer name is required.")
+    payment_method = payload.get("payment_method")
+    if payment_method not in dict(CustomerOrder.PAYMENT_METHOD_CHOICES):
+        raise ValueError("Please choose a payment method.")
+    online_channel = payload.get("online_payment_channel") or ""
+    if payment_method == CustomerOrder.PAYMENT_METHOD_ONLINE and online_channel not in dict(CustomerOrder.ONLINE_CHOICES):
+        raise ValueError("Please choose GCash, Maya, or Bank Transfer.")
+
+    payment_status = CustomerOrder.PAYMENT_UNPAID
+    order_status = CustomerOrder.STATUS_PENDING_PAYMENT
+    if payment_method == CustomerOrder.PAYMENT_METHOD_ONLINE:
+        payment_status = CustomerOrder.PAYMENT_WAITING
+        order_status = CustomerOrder.STATUS_PENDING_VERIFICATION
+
+    order = CustomerOrder.objects.create(
+        customer_name=customer_name,
+        contact_number=str(payload.get("contact_number") or "").strip(),
+        special_instructions=str(payload.get("special_instructions") or "").strip(),
+        payment_method=payment_method,
+        online_payment_channel=online_channel,
+        payment_status=payment_status,
+        order_status=order_status,
+        payment_proof=files.get("payment_proof"),
+    )
+    subtotal = Decimal("0.00")
+    for cart_item in items:
+        product = POSProduct.objects.select_related("category").get(pk=cart_item.get("product_id"), is_active=True)
+        quantity = max(int(cart_item.get("quantity") or 1), 1)
+        line_total = product.price_for_quantity(quantity)
+        line_cost = (product.cost or Decimal("0.00")) * Decimal(str(quantity))
+        item = CustomerOrderItem.objects.create(
+            order=order,
+            product=product,
+            product_name=product.name,
+            category_name=product.category.name,
+            category_type=product.category.category_type,
+            quantity=quantity,
+            unit_price=product.price,
+            line_total=line_total,
+            unit_cost=product.cost or Decimal("0.00"),
+            line_cost=line_cost,
+            line_profit=line_total - line_cost,
+        )
+        subtotal += line_total
+        for addon_row in cart_item.get("addons") or []:
+            addon = POSProduct.objects.select_related("category").get(
+                pk=addon_row.get("product_id"),
+                is_active=True,
+                category__category_type=POSCategory.TYPE_ADDON,
+            )
+            addon_qty = max(int(addon_row.get("quantity") or quantity), 1)
+            addon_total = addon.price * Decimal(str(addon_qty))
+            CustomerOrderItemAddon.objects.create(
+                order_item=item,
+                addon=addon,
+                addon_name=addon.name,
+                quantity=addon_qty,
+                price=addon.price,
+                line_total=addon_total,
+            )
+            subtotal += addon_total
+    order.subtotal = subtotal
+    order.total_amount = subtotal
+    order.save(update_fields=["subtotal", "total_amount"])
+    OrderPayment.objects.create(
+        order=order,
+        method=payment_method,
+        online_channel=online_channel,
+        amount=order.total_amount,
+        status=payment_status,
+        proof=order.payment_proof,
+    )
+    OrderStatusHistory.objects.create(order=order, new_status=order_status, note="Customer submitted order.")
+    OrderNotification.objects.create(order=order, title="New Customer Order Received", message=order.order_number)
+    return order
+
+
+@transaction.atomic
+def complete_customer_order(order, user=None):
+    if order.order_status == CustomerOrder.STATUS_COMPLETED and order.pos_order_id:
+        return order.pos_order
+    if order.payment_status != CustomerOrder.PAYMENT_PAID:
+        raise ValueError("Payment must be paid before completing the order.")
+    today = _timezone.localdate()
+    customer_number = (POSOrder.objects.filter(created_at__date=today).aggregate(max_customer=Max("customer_number"))["max_customer"] or 0) + 1
+    pos_order = POSOrder.objects.create(
+        customer_number=customer_number,
+        customer_name=order.customer_name,
+        subtotal=order.subtotal,
+        total_amount=order.total_amount,
+        cash_received=order.cash_received if order.payment_method == CustomerOrder.PAYMENT_METHOD_CASH else order.total_amount,
+        change_amount=order.change_amount if order.payment_method == CustomerOrder.PAYMENT_METHOD_CASH else Decimal("0.00"),
+        payment_method=POSOrder.METHOD_ONLINE if order.payment_method == CustomerOrder.PAYMENT_METHOD_ONLINE else POSOrder.METHOD_CASH,
+        payment_status=POSOrder.PAYMENT_PAID,
+        source=POSOrder.SOURCE_TABLET,
+    )
+    for source_item in order.items.select_related("product").prefetch_related("addons").all():
+        pos_item = POSOrderItem.objects.create(
+            order=pos_order,
+            product=source_item.product,
+            product_name=source_item.product_name,
+            category_name=source_item.category_name,
+            category_type=source_item.category_type,
+            quantity=source_item.quantity,
+            unit_price=source_item.unit_price,
+            line_total=source_item.line_total,
+            unit_cost=source_item.unit_cost,
+            line_cost=source_item.line_cost,
+            line_profit=source_item.line_profit,
+        )
+        for source_addon in source_item.addons.select_related("addon").all():
+            POSOrderItemAddon.objects.create(
+                order_item=pos_item,
+                addon=source_addon.addon,
+                addon_name=source_addon.addon_name,
+                quantity=source_addon.quantity,
+                price=source_addon.price,
+                line_total=source_addon.line_total,
+            )
+    old_status = order.order_status
+    order.order_status = CustomerOrder.STATUS_COMPLETED
+    order.completed_at = order.completed_at or _timezone.now()
+    order.pos_order = pos_order
+    order.save(update_fields=["order_status", "completed_at", "pos_order", "updated_at"])
+    OrderStatusHistory.objects.create(order=order, old_status=old_status, new_status=order.order_status, changed_by=user, note="Completed and posted to POS sales.")
+    return pos_order
+
+
+def broadcast_customer_queue_update():
+    _send_group(
+        REALTIME_CUSTOMER_QUEUE_GROUP,
+        {
+            "type": "customer_queue.update",
+            "payload": get_customer_queue_payload(),
+        },
+    )
+
+
+def broadcast_staff_queue_update(new_order=False):
+    _send_group(
+        REALTIME_STAFF_QUEUE_GROUP,
+        {
+            "type": "staff_queue.update",
+            "payload": get_staff_queue_payload(),
+            "new_order": new_order,
+        },
+    )
 
 
 def serialize_material(material):
