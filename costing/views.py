@@ -1684,6 +1684,13 @@ def serialize_queue_item(queue_item):
     }
 
 
+def todays_pos_queue_items():
+    today = timezone.localdate()
+    return POSQueueItem.objects.filter(order__created_at__date=today).select_related(
+        "order", "order_item"
+    ).prefetch_related("order_item__addons")
+
+
 class CustomerOrderPageView(TemplateView):
     template_name = "costing/customer_order.html"
 
@@ -1777,6 +1784,8 @@ class CustomerOrderActionView(View):
 
         try:
             if action == "mark_paid":
+                if order.payment_method != CustomerOrder.PAYMENT_METHOD_CASH:
+                    return JsonResponse({"ok": False, "error": "Online payments must use Verify Payment."}, status=400)
                 if order.payment_method == CustomerOrder.PAYMENT_METHOD_CASH:
                     cash_received = clean_decimal(request.POST.get("cash_received"), "0")
                     if cash_received < order.total_amount:
@@ -1789,6 +1798,8 @@ class CustomerOrderActionView(View):
                     order.order_status = CustomerOrder.STATUS_PREPARING
                     order.preparing_at = order.preparing_at or now
             elif action == "verify_payment":
+                if order.payment_method == CustomerOrder.PAYMENT_METHOD_CASH:
+                    return JsonResponse({"ok": False, "error": "Cash orders must use Mark Paid with the cash received amount."}, status=400)
                 order.payment_status = CustomerOrder.PAYMENT_PAID
                 order.paid_at = order.paid_at or now
                 order.order_status = CustomerOrder.STATUS_PREPARING
@@ -1802,7 +1813,8 @@ class CustomerOrderActionView(View):
             elif action == "completed":
                 if order.payment_status != CustomerOrder.PAYMENT_PAID:
                     return JsonResponse({"ok": False, "error": "Mark payment as paid first."}, status=400)
-                complete_customer_order(order, user=request.user if request.user.is_authenticated else None)
+                pos_order = complete_customer_order(order, user=request.user if request.user.is_authenticated else None)
+                receipt_url = reverse("pos_receipt", kwargs={"pk": pos_order.pk})
             elif action == "cancel":
                 order.order_status = CustomerOrder.STATUS_CANCELLED
                 order.cancelled_at = order.cancelled_at or now
@@ -1840,7 +1852,10 @@ class CustomerOrderActionView(View):
 
         broadcast_customer_queue_update()
         broadcast_staff_queue_update()
-        return JsonResponse({"ok": True, "order": get_staff_queue_payload()})
+        response = {"ok": True, "order": get_staff_queue_payload()}
+        if "receipt_url" in locals():
+            response["receipt_url"] = receipt_url
+        return JsonResponse(response)
 
 
 class CustomerOrderNotesView(View):
@@ -1858,7 +1873,7 @@ class CustomerOrderReceiptRedirectView(View):
         if not order.pos_order_id:
             messages.error(request, "Complete this customer order before printing a receipt.")
             return redirect("customer_order_queue")
-        return redirect("pos_receipt", pk=order.pos_order_id)
+        return redirect(f"{reverse('pos_receipt', kwargs={'pk': order.pos_order_id})}?next={reverse('customer_order_queue')}")
 
 
 class FastPOSView(TemplateView):
@@ -1890,12 +1905,9 @@ class FastPOSView(TemplateView):
         addons = list(products.filter(category__category_type=POSCategory.TYPE_ADDON))
         today = timezone.localdate()
         next_customer = (POSOrder.objects.filter(created_at__date=today).aggregate(max_customer=Max("customer_number"))["max_customer"] or 0) + 1
-        active_queue = POSQueueItem.objects.exclude(status=POSQueueItem.STATUS_COMPLETED).select_related(
-            "order", "order_item"
-        ).prefetch_related("order_item__addons")
-        completed_queue = POSQueueItem.objects.filter(status=POSQueueItem.STATUS_COMPLETED).select_related(
-            "order", "order_item"
-        ).prefetch_related("order_item__addons").order_by("-completed_at", "-queued_at", "-id")[:5]
+        queue_items = todays_pos_queue_items()
+        active_queue = queue_items.exclude(status=POSQueueItem.STATUS_COMPLETED)
+        completed_queue = queue_items.filter(status=POSQueueItem.STATUS_COMPLETED).order_by("-completed_at", "-queued_at", "-id")[:5]
 
         ctx.update({
             "product_groups": product_groups,
@@ -2000,12 +2012,9 @@ class POSCreateOrderView(View):
 
 class POSQueueDataView(View):
     def get(self, request):
-        active = POSQueueItem.objects.exclude(status=POSQueueItem.STATUS_COMPLETED).select_related(
-            "order", "order_item"
-        ).prefetch_related("order_item__addons")
-        completed = POSQueueItem.objects.filter(status=POSQueueItem.STATUS_COMPLETED).select_related(
-            "order", "order_item"
-        ).prefetch_related("order_item__addons").order_by("-completed_at", "-queued_at", "-id")[:5]
+        queue_items = todays_pos_queue_items()
+        active = queue_items.exclude(status=POSQueueItem.STATUS_COMPLETED)
+        completed = queue_items.filter(status=POSQueueItem.STATUS_COMPLETED).order_by("-completed_at", "-queued_at", "-id")[:5]
         return JsonResponse({
             "active": [serialize_queue_item(item) for item in active],
             "completed": [serialize_queue_item(item) for item in completed],
@@ -2035,6 +2044,14 @@ class POSReceiptView(DetailView):
     model = POSOrder
     template_name = "costing/pos_receipt.html"
     context_object_name = "order"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        next_url = self.request.GET.get("next") or self.request.META.get("HTTP_REFERER") or reverse("fast_pos")
+        if not str(next_url).startswith("/"):
+            next_url = reverse("fast_pos")
+        ctx["next_url"] = next_url
+        return ctx
 
 
 class POSSalesDashboardView(TemplateView):

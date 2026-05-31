@@ -77,6 +77,8 @@ class StickerSizeForm(BootstrapModelForm):
             "width_in",
             "height_in",
             "use_cricut_safe_area",
+            "cricut_fit_override",
+            "full_fit_override",
             "is_active",
             "notes",
         ]

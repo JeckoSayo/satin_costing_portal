@@ -59,7 +59,12 @@ class MarketplaceFeeAdmin(admin.ModelAdmin):
 
 
 admin.site.register(PaperSize)
-admin.site.register(StickerSize)
+@admin.register(StickerSize)
+class StickerSizeAdmin(admin.ModelAdmin):
+    list_display = ("name", "width_in", "height_in", "paper_size", "safe_fit", "max_tight_fit", "cricut_fit_override", "full_fit_override", "is_active")
+    list_filter = ("is_active", "use_cricut_safe_area", "paper_size")
+    search_fields = ("name",)
+
 admin.site.register(PriceSetting)
 admin.site.register(EquipmentOverhead)
 

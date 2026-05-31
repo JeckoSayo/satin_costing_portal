@@ -74,14 +74,15 @@
                           data-promo-price="{{ product.promo_bundle_price }}"
                           data-allow-addons="{% if product.allow_addons %}true{% else %}false{% endif %}"
                           data-image-url="{% if product.image %}{{ product.image.url }}{% endif %}">
+                    <em class="customer-product-count" data-product-count="{{ product.id }}" hidden>0</em>
                     {% if product.image %}
                       <img src="{{ product.image.url }}" alt="{{ product.name }}">
                     {% else %}
                       <span class="customer-product-placeholder"><i class="bi bi-cup-hot"></i></span>
                     {% endif %}
-                    <span>{{ product.name }}</span>
-                    <small>{{ product.description|default:"Fresh from Satin"|truncatechars:70 }}</small>
-                    <strong>&#8369;{{ product.price|floatformat:2 }}</strong>
+                    <span class="customer-product-name">{{ product.name }}</span>
+                    <strong class="customer-product-price">&#8369;{{ product.price|floatformat:2 }}</strong>
+                    <span class="customer-product-add"><i class="bi bi-plus-lg"></i></span>
                   </button>
                 {% endfor %}
               </div>
@@ -257,6 +258,7 @@
     if (!cart.length) {
       target.innerHTML = '<div class="text-center text-muted py-4">Your cart is empty.</div>';
       document.getElementById('customerTotal').innerHTML = money(0);
+      updateProductCounts();
       return;
     }
     target.innerHTML = cart.map(item => `
@@ -278,6 +280,17 @@
       ${item.allowAddons ? `<div class="customer-line-addons">${addons.map(addon => `<button class="btn btn-sm btn-outline-primary" data-line-id="${item.lineId}" data-addon-id="${addon.id}">+ ${text(addon.name)}</button>`).join('')}</div>` : ''}
     `).join('');
     document.getElementById('customerTotal').innerHTML = money(total());
+    updateProductCounts();
+  }
+  function updateProductCounts(){
+    document.querySelectorAll('[data-product-count]').forEach(badge => {
+      const productId = Number(badge.dataset.productCount);
+      const qty = cart
+        .filter(item => item.productId === productId)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      badge.textContent = qty;
+      badge.hidden = qty <= 0;
+    });
   }
   document.querySelectorAll('.customer-product-tile').forEach(button => {
     button.addEventListener('click', () => {
@@ -407,7 +420,7 @@
     resetCustomerOrderForm();
     refreshQueue();
     if (successModalTimer) clearTimeout(successModalTimer);
-    successModalTimer = setTimeout(() => successModal.hide(), 1000);
+    successModalTimer = setTimeout(() => successModal.hide(), 9000);
   });
   function renderQueue(payload){
     document.getElementById('statPreparing').textContent = payload.stats.preparing_orders;

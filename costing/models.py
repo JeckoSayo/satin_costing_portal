@@ -36,6 +36,16 @@ class StickerSize(models.Model):
     height_in = models.DecimalField(max_digits=6, decimal_places=2)
     paper_size = models.ForeignKey(PaperSize, on_delete=models.SET_NULL, null=True, blank=True)
     use_cricut_safe_area = models.BooleanField(default=True)
+    cricut_fit_override = models.PositiveIntegerField(
+        default=0,
+        blank=True,
+        help_text="Optional real-world Cricut fit per sheet. Leave 0 to calculate automatically.",
+    )
+    full_fit_override = models.PositiveIntegerField(
+        default=0,
+        blank=True,
+        help_text="Optional full-sheet fit per sheet. Leave 0 to calculate automatically.",
+    )
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
 
@@ -46,9 +56,18 @@ class StickerSize(models.Model):
         return self.name
 
     def get_fit(self, use_cricut=True):
+        if use_cricut and self.cricut_fit_override:
+            return self.cricut_fit_override
+        if not use_cricut and self.full_fit_override:
+            return self.full_fit_override
+
         if not self.paper_size:
-            paper_w = Decimal("8.27")
-            paper_h = Decimal("11.69")
+            if use_cricut:
+                paper_w = Decimal("7.19")
+                paper_h = Decimal("9.70")
+            else:
+                paper_w = Decimal("8.27")
+                paper_h = Decimal("11.69")
         else:
             if use_cricut:
                 paper_w = self.paper_size.cricut_safe_width_in

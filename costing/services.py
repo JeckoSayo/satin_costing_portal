@@ -1059,9 +1059,10 @@ def get_customer_ordering_settings():
 
 
 def active_customer_orders():
+    today = _timezone.localdate()
     return CustomerOrder.objects.exclude(
         order_status__in=[CustomerOrder.STATUS_COMPLETED, CustomerOrder.STATUS_CANCELLED]
-    )
+    ).filter(created_at__date=today)
 
 
 def customer_queue_stats():
