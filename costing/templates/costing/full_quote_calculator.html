@@ -1003,10 +1003,9 @@ function getActivePaperArea() {
 function calculateFitPerSheet(itemWidth, itemHeight) {
   const paper = getActivePaperArea();
   if (itemWidth <= 0 || itemHeight <= 0) return 0;
-  return Math.max(
-    Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight),
-    0
-  );
+  const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
+  const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
+  return Math.max(normal, rotated, 0);
 }
 
 function getFitDetails(itemWidth, itemHeight) {
@@ -1016,7 +1015,8 @@ function getFitDetails(itemWidth, itemHeight) {
   }
   const normal = Math.floor(paper.width / itemWidth) * Math.floor(paper.height / itemHeight);
   const rotated = Math.floor(paper.width / itemHeight) * Math.floor(paper.height / itemWidth);
-  return { fit: Math.max(normal, 0), orientation: "Normal", normal, rotated };
+  const fit = Math.max(normal, rotated, 0);
+  return { fit, orientation: rotated > normal ? "Rotated" : "Normal", normal, rotated };
 }
 
 function getStickersPerSheet() {

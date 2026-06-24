@@ -48,6 +48,7 @@
             <th>Payment Status</th>
             <th>Order Status</th>
             <th>Order Time</th>
+            <th>Waiting Time</th>
             <th>Staff Notes</th>
             <th>Actions</th>
           </tr>
@@ -114,6 +115,43 @@ function productSummary(order) {
 function quantitySummary(order) {
   return order.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 }
+function parseOrderTime(value) {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+function formatWaitingTime(startIso, stopIso) {
+  const start = parseOrderTime(startIso);
+  if (!start) return '-';
+  const stop = parseOrderTime(stopIso) || new Date();
+  const seconds = Math.max(0, Math.floor((stop - start) / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${remainingSeconds.toString().padStart(2, '0')}s`;
+}
+function timerCell(order) {
+  const running = order.waiting_timer_running ? '1' : '0';
+  const label = order.waiting_timer_running ? 'Running' : 'Stopped';
+  return `
+    <span class="queue-wait-timer ${order.waiting_timer_running ? '' : 'stopped'}"
+          data-wait-start="${text(order.created_at_iso)}"
+          data-wait-stop="${text(order.waiting_stopped_at_iso)}"
+          data-wait-running="${running}">
+      <i class="bi bi-stopwatch"></i>
+      <strong>${formatWaitingTime(order.created_at_iso, order.waiting_stopped_at_iso)}</strong>
+      <small>${label}</small>
+    </span>
+  `;
+}
+function updateWaitTimers() {
+  document.querySelectorAll('.queue-wait-timer').forEach(timer => {
+    const start = timer.dataset.waitStart || '';
+    const stop = timer.dataset.waitRunning === '1' ? '' : timer.dataset.waitStop || '';
+    const target = timer.querySelector('strong');
+    if (target) target.textContent = formatWaitingTime(start, stop);
+  });
+}
 function actionButtons(order) {
   const cashValue = cashDrafts[order.id] !== undefined ? cashDrafts[order.id] : (order.cash_received || '');
   const markPaidButton = order.payment_method === 'Cash'
@@ -175,10 +213,11 @@ function renderRows() {
       <td><span class="badge text-bg-light">${text(order.payment_status)}</span></td>
       <td><span class="badge ${statusBadge(order.order_status)}">${text(order.order_status)}</span></td>
       <td>${text(order.created_at)}</td>
+      <td>${timerCell(order)}</td>
       <td><textarea class="form-control form-control-sm staff-note" data-id="${order.id}" rows="2">${text(order.staff_notes)}</textarea></td>
       <td>${actionButtons(order)}</td>
     </tr>
-  `).join('') : '<tr><td colspan="11" class="text-center text-muted py-4">No active customer orders.</td></tr>';
+  `).join('') : '<tr><td colspan="12" class="text-center text-muted py-4">No active customer orders.</td></tr>';
 }
 function render(payload) {
   queuePayload = payload;
@@ -197,6 +236,7 @@ async function runAction(id, action) {
   const response = await fetch(`/pos/order-queue/${id}/action/`, {method: 'POST', headers: {'X-CSRFToken': csrfToken}, body: formData});
   const data = await response.json();
   if (!data.ok) { showToast('Action failed', data.error || 'Could not update order.'); return; }
+  showToast('Order updated', data.message || 'The order was updated.');
   if (data.receipt_url) window.open(`${data.receipt_url}?next=${encodeURIComponent('/pos/order-queue/')}`, '_blank');
   await refreshStaffQueue();
 }
@@ -218,6 +258,7 @@ function showDetails(id) {
       <dt class="col-sm-4">Payment Status</dt><dd class="col-sm-8">${text(order.payment_status)}</dd>
       <dt class="col-sm-4">Order Status</dt><dd class="col-sm-8">${text(order.order_status)}</dd>
       <dt class="col-sm-4">Order Time</dt><dd class="col-sm-8">${text(order.created_at)}</dd>
+      <dt class="col-sm-4">Waiting Time</dt><dd class="col-sm-8">${formatWaitingTime(order.created_at_iso, order.waiting_stopped_at_iso)}</dd>
       <dt class="col-sm-4">Staff Notes</dt><dd class="col-sm-8">${text(order.staff_notes) || '-'}</dd>
       <dt class="col-sm-4">Payment Proof</dt><dd class="col-sm-8">${order.payment_proof_url ? `<a href="${order.payment_proof_url}" target="_blank">Open proof</a>` : '-'}</dd>
     </dl>`;
@@ -263,6 +304,7 @@ function connectStaffSocket(){
 }
 try { connectStaffSocket(); } catch (err) {}
 setInterval(refreshStaffQueue, 5000);
+setInterval(updateWaitTimers, 1000);
 render(queuePayload);
 </script>
 {% endblock %}

@@ -99,40 +99,46 @@
           <button class="btn btn-sm btn-outline-secondary" id="clearCartBtn" type="button"><i class="bi bi-trash"></i></button>
         </div>
 
-        <div class="row g-2">
-          <div class="col-12">
-            <label class="form-label">Customer Name <span class="text-danger">*</span></label>
-            <input class="form-control form-control-lg mobile-text-input"
-                   id="customerNameInput"
-                   name="customer_name"
-                   required
-                   autocomplete="name"
-                   autocapitalize="words"
-                   spellcheck="false"
-                   inputmode="text">
-          </div>
-          <div class="col-12">
-            <label class="form-label">Contact Number</label>
-            <input class="form-control mobile-text-input"
-                   id="contactNumberInput"
-                   name="contact_number"
-                   inputmode="tel"
-                   autocomplete="tel">
-          </div>
-          <div class="col-12">
-            <label class="form-label">Special Instructions</label>
-            <textarea class="form-control mobile-text-input"
-                      id="specialInstructionsInput"
-                      name="special_instructions"
-                      rows="2"
-                      autocomplete="off"
-                      autocapitalize="sentences"
-                      placeholder="Less sweet, no ice, extra ice, separate packaging"></textarea>
+        <div class="customer-order-section customer-details-section">
+          <div class="customer-order-section-title">Customer Details</div>
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Customer Name <span class="text-danger">*</span></label>
+              <input class="form-control form-control-lg mobile-text-input"
+                     id="customerNameInput"
+                     name="customer_name"
+                     required
+                     autocomplete="name"
+                     autocapitalize="words"
+                     spellcheck="false"
+                     inputmode="text">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Contact Number</label>
+              <input class="form-control mobile-text-input"
+                     id="contactNumberInput"
+                     name="contact_number"
+                     inputmode="tel"
+                     autocomplete="tel">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Special Instructions</label>
+              <textarea class="form-control mobile-text-input"
+                        id="specialInstructionsInput"
+                        name="special_instructions"
+                        rows="2"
+                        autocomplete="off"
+                        autocapitalize="sentences"
+                        placeholder="Less sweet, no ice, extra ice, separate packaging"></textarea>
+            </div>
           </div>
         </div>
 
-        <div id="customerCartLines" class="customer-cart-lines">
-          <div class="text-center text-muted py-4">Your cart is empty.</div>
+        <div class="customer-order-section customer-items-section">
+          <div class="customer-order-section-title">Order Items</div>
+          <div id="customerCartLines" class="customer-cart-lines">
+            <div class="text-center text-muted py-4">Your cart is empty.</div>
+          </div>
         </div>
 
         <div class="customer-payment-box">
@@ -142,12 +148,23 @@
             <label><input type="radio" name="paymentMethod" value="Online Payment"> Online Payment</label>
           </div>
           <div id="onlinePaymentPanel" class="customer-online-panel d-none">
-            <select class="form-select mb-2" id="onlineChannelInput">
+            <select class="form-select d-none" id="onlineChannelInput" aria-hidden="true" tabindex="-1">
               <option value="">Choose online payment</option>
               <option value="GCash">GCash</option>
               <option value="Maya">Maya</option>
               <option value="Bank Transfer">Bank Transfer</option>
             </select>
+            <div class="customer-payment-picker" id="onlineChannelPicker">
+              <button type="button" class="customer-payment-picker-toggle" id="onlineChannelPickerToggle" aria-expanded="false">
+                <span id="onlineChannelPickerLabel">Choose online payment</span>
+                <i class="bi bi-chevron-down"></i>
+              </button>
+              <div class="customer-payment-picker-menu" id="onlineChannelPickerMenu">
+                <button type="button" data-payment-channel="GCash"><i class="bi bi-phone"></i><span>GCash</span></button>
+                <button type="button" data-payment-channel="Maya"><i class="bi bi-wallet2"></i><span>Maya</span></button>
+                <button type="button" data-payment-channel="Bank Transfer"><i class="bi bi-bank"></i><span>Bank Transfer</span></button>
+              </div>
+            </div>
             <div class="customer-qr-grid">
               <div data-channel="GCash">{% if settings.gcash_qr %}<img src="{{ settings.gcash_qr.url }}" alt="GCash QR">{% endif %}<p>{{ settings.gcash_instructions|cut:" and upload your payment proof"|cut:" upload your payment proof"|cut:" and upload your payment proof." }}</p></div>
               <div data-channel="Maya">{% if settings.maya_qr %}<img src="{{ settings.maya_qr.url }}" alt="Maya QR">{% endif %}<p>{{ settings.maya_instructions|cut:" and upload your payment proof"|cut:" upload your payment proof"|cut:" and upload your payment proof." }}</p></div>
@@ -246,6 +263,23 @@
     customerToastTimer = setTimeout(hideCustomerToast, 7000);
   }
   function lineKey(id){ return `${id}-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
+  function findPlainProductLine(productId){
+    return cart.find(item => item.productId === productId && item.addons.length === 0);
+  }
+  function setOnlineChannel(channel){
+    const input = document.getElementById('onlineChannelInput');
+    const picker = document.getElementById('onlineChannelPicker');
+    const label = document.getElementById('onlineChannelPickerLabel');
+    input.value = channel || '';
+    label.textContent = channel || 'Choose online payment';
+    picker.classList.toggle('has-value', Boolean(channel));
+    picker.classList.remove('open');
+    document.getElementById('onlineChannelPickerToggle').setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('[data-payment-channel]').forEach(button => {
+      button.classList.toggle('active', button.dataset.paymentChannel === channel);
+    });
+    document.querySelectorAll('.customer-qr-grid > div').forEach(row => row.classList.toggle('active', row.dataset.channel === channel));
+  }
   function baseTotal(item){
     if (item.promoQty && item.promoPrice && item.quantity >= item.promoQty) {
       return Math.floor(item.quantity / item.promoQty) * item.promoPrice + (item.quantity % item.promoQty) * item.price;
@@ -294,9 +328,17 @@
   }
   document.querySelectorAll('.customer-product-tile').forEach(button => {
     button.addEventListener('click', () => {
+      const productId = Number(button.dataset.productId);
+      const existing = findPlainProductLine(productId);
+      if (existing) {
+        existing.quantity += 1;
+        selectedLineId = existing.lineId;
+        renderCart();
+        return;
+      }
       const item = {
-        lineId: lineKey(button.dataset.productId),
-        productId: Number(button.dataset.productId),
+        lineId: lineKey(productId),
+        productId,
         name: button.dataset.name,
         price: Number(button.dataset.price),
         promoQty: Number(button.dataset.promoQty || 0),
@@ -358,18 +400,29 @@
     document.getElementById('customerNameInput').value = '';
     document.getElementById('contactNumberInput').value = '';
     document.getElementById('specialInstructionsInput').value = '';
-    document.getElementById('onlineChannelInput').value = '';
+    setOnlineChannel('');
     document.getElementById('onlinePaymentPanel').classList.add('d-none');
     document.querySelectorAll('input[name="paymentMethod"]').forEach(input => input.checked = false);
-    document.querySelectorAll('.customer-qr-grid > div').forEach(row => row.classList.remove('active'));
     renderCart();
   }
   document.getElementById('clearCartBtn').addEventListener('click', resetCustomerOrderForm);
   document.querySelectorAll('input[name="paymentMethod"]').forEach(input => input.addEventListener('change', () => {
     document.getElementById('onlinePaymentPanel').classList.toggle('d-none', input.value !== 'Online Payment' || !input.checked);
   }));
-  document.getElementById('onlineChannelInput').addEventListener('change', event => {
-    document.querySelectorAll('.customer-qr-grid > div').forEach(row => row.classList.toggle('active', row.dataset.channel === event.target.value));
+  document.getElementById('onlineChannelPickerToggle').addEventListener('click', () => {
+    const picker = document.getElementById('onlineChannelPicker');
+    const isOpen = picker.classList.toggle('open');
+    document.getElementById('onlineChannelPickerToggle').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-payment-channel]').forEach(button => {
+    button.addEventListener('click', () => setOnlineChannel(button.dataset.paymentChannel));
+  });
+  document.addEventListener('click', event => {
+    const picker = document.getElementById('onlineChannelPicker');
+    if (!picker.contains(event.target)) {
+      picker.classList.remove('open');
+      document.getElementById('onlineChannelPickerToggle').setAttribute('aria-expanded', 'false');
+    }
   });
   function validateOrder(){
     const name = document.getElementById('customerNameInput').value.trim();

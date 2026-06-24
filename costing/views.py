@@ -1820,7 +1820,9 @@ class CustomerOrderActionView(View):
                 order.cancelled_at = order.cancelled_at or now
             elif action == "refund":
                 order.payment_status = CustomerOrder.PAYMENT_REFUNDED
+                order.order_status = CustomerOrder.STATUS_CANCELLED
                 order.refunded_at = order.refunded_at or now
+                order.cancelled_at = order.cancelled_at or now
                 if order.pos_order:
                     order.pos_order.payment_status = POSOrder.PAYMENT_VOID
                     order.pos_order.save(update_fields=["payment_status"])
@@ -1852,7 +1854,7 @@ class CustomerOrderActionView(View):
 
         broadcast_customer_queue_update()
         broadcast_staff_queue_update()
-        response = {"ok": True, "order": get_staff_queue_payload()}
+        response = {"ok": True, "order": get_staff_queue_payload(), "message": "Order refunded and removed from the active queue." if action == "refund" else "Order updated."}
         if "receipt_url" in locals():
             response["receipt_url"] = receipt_url
         return JsonResponse(response)

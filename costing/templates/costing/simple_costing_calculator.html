@@ -429,6 +429,10 @@
     return roundedPeso.format(Math.round(numericAmount(amount)));
   }
 
+  function formatMoney(amount) {
+    return peso.format(numericAmount(amount));
+  }
+
   function getSelectedText(id) {
     const select = document.getElementById(id);
     if (!select || select.selectedIndex < 0) return '';
@@ -545,7 +549,7 @@
     money('srpResult', srp);
     money('shippingFeeText', result.shipping_fee || 0);
     money('roundedSrpResult', result.recommended_base_price || srp);
-    roundedMoney('pricePerPiece', result.price_per_piece || 0);
+    money('pricePerPiece', result.price_per_piece || 0);
 
     text('profitMargin', `${numericAmount(result.profit_margin || 0).toFixed(2)}%`);
     text('selectedSizeText', result.sticker_size || getSelectedText('stickerSize') || '-');
@@ -742,7 +746,7 @@
           <td>${item.sticker_size}</td>
           <td>${item.quantity}</td>
           <td>${item.sheets_needed}</td>
-          <td>${formatRoundedMoney(item.unit_price || 0)}</td>
+          <td>${formatMoney(item.unit_price || 0)}</td>
           <td>${peso.format(item.line_total || 0)}</td>
           <td>${peso.format(item.line_cost || 0)}</td>
           <td>${peso.format(item.line_profit || 0)}</td>
@@ -873,7 +877,7 @@
       `Profit: ${peso.format(summary.profit || 0)}`,
       `SRP: ${peso.format(summary.srp || 0)}`,
       `Rounded SRP: ${peso.format(summary.roundedSrp || 0)}`,
-      `Price / Piece: ${formatRoundedMoney(summary.pricePerPiece || 0)}`,
+      `Price / Piece: ${formatMoney(summary.pricePerPiece || 0)}`,
       `Profit Margin: ${(summary.profitMargin || 0).toFixed(2)}%`
     ];
 

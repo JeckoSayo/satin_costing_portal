@@ -110,10 +110,10 @@
   </div>
 </div>
 
-<div class="modal fade" id="productModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade pos-product-modal" id="productModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
-      <form method="post" action="{% url 'pos_product_quick_add' %}" enctype="multipart/form-data">
+      <form class="pos-product-form" method="post" action="{% url 'pos_product_quick_add' %}" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="modal-header"><h5 class="modal-title">Add POS Product</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body"><div class="row g-3">{% for field in product_form %}<div class="col-md-6 {% if field.name == 'description' %}col-12{% endif %}"><label class="form-label fw-bold">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>{% endfor %}</div></div>
@@ -137,10 +137,10 @@
 </div>
 
 {% for p in pos_products %}
-  <div class="modal fade" id="editProduct{{ p.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal fade pos-product-modal" id="editProduct{{ p.id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
-        <form method="post" action="{% url 'pos_product_quick_edit' p.id %}" enctype="multipart/form-data">
+        <form class="pos-product-form" method="post" action="{% url 'pos_product_quick_edit' p.id %}" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="modal-header"><h5 class="modal-title">Edit {{ p.name }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
           <div class="modal-body">

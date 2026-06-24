@@ -73,9 +73,16 @@ def calculate_fit_per_sheet(width, height, printable_width, printable_height):
     if normal_fit <= 0 and rotated_fit <= 0:
         raise ValueError("Custom size does not fit inside the selected print area.")
 
+    if rotated_fit > normal_fit:
+        fit_per_sheet = rotated_fit
+        orientation = "Rotated"
+    else:
+        fit_per_sheet = normal_fit
+        orientation = "Normal"
+
     return {
-        "fit_per_sheet": normal_fit,
-        "orientation": "Normal",
+        "fit_per_sheet": fit_per_sheet,
+        "orientation": orientation,
         "normal_fit": normal_fit,
         "rotated_fit": rotated_fit,
     }
@@ -256,6 +263,7 @@ def calculate_quote(data):
     settings = PriceSetting.objects.first() or PriceSetting.objects.create()
 
     quantity = int(D(data.get("quantity"), "0"))
+    minimum_unit_price = Decimal("1.00")
     platform = data.get("platform") or SaleLog.PLATFORM_WALKIN
 
     material = get_object_or_none(Material, data.get("material_id"))
@@ -367,6 +375,18 @@ def calculate_quote(data):
         discount = recommended_base_price * settings.default_discount_percent / Decimal("100")
         product_sale_price = max(recommended_base_price - discount, minimum_order_price)
         product_sale_price = round_selling_price(product_sale_price, settings.rounding_mode)
+
+    if quantity > 0:
+        unit_price = (product_sale_price / D(quantity)).to_integral_value(rounding=ROUND_CEILING)
+        protected_unit_price = max(unit_price, minimum_unit_price)
+        protected_unit_total = D(quantity) * protected_unit_price
+    else:
+        protected_unit_total = Decimal("0")
+
+    if quantity > 0 and product_sale_price < protected_unit_total:
+        recommended_base_price = protected_unit_total
+        discount = Decimal("0")
+        product_sale_price = protected_unit_total
 
     platform_fee = (product_sale_price * marketplace_fee_percent / Decimal("100")) + marketplace_fixed_fee
     sales_tax = product_sale_price * settings.default_sales_tax_percent / Decimal("100")
@@ -1080,6 +1100,10 @@ def customer_queue_stats():
 
 
 def serialize_customer_queue_order(order, include_private=False, tracked_order_number=""):
+    stopped_at = (order.ready_at or order.completed_at) if order.order_status in [
+        CustomerOrder.STATUS_READY,
+        CustomerOrder.STATUS_COMPLETED,
+    ] else None
     status_classes = {
         CustomerOrder.STATUS_PENDING_PAYMENT: "queue-status-payment",
         CustomerOrder.STATUS_PENDING_VERIFICATION: "queue-status-verification",
@@ -1093,6 +1117,13 @@ def serialize_customer_queue_order(order, include_private=False, tracked_order_n
         "payment_status": order.payment_status,
         "status_class": status_classes.get(order.order_status, "queue-status-muted"),
         "created_at": order.created_at.strftime("%m/%d/%y %I:%M %p") if order.created_at else "",
+        "created_at_iso": order.created_at.isoformat() if order.created_at else "",
+        "waiting_stopped_at_iso": stopped_at.isoformat() if stopped_at else "",
+        "waiting_timer_running": order.order_status not in [
+            CustomerOrder.STATUS_READY,
+            CustomerOrder.STATUS_COMPLETED,
+            CustomerOrder.STATUS_CANCELLED,
+        ],
         "is_tracked": bool(tracked_order_number and order.order_number == tracked_order_number),
     }
     if include_private:
